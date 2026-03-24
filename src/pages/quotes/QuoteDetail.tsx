@@ -7,7 +7,7 @@ import { db } from '../../firebase';
 import Spinner from '../../components/Spinner';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import domtoimage from 'dom-to-image-more';
+import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import type { QuoteDetail } from '../../types/models';
 
@@ -39,12 +39,12 @@ export default function QuoteDetail() {
   const handlePdfDownload = async () => {
     const element = document.getElementById('quote-document');
     if (!element || !quote) return;
-    
+
     toast.loading('PDFを生成中...', { id: 'pdf-loading' });
-    
+
     const isDark = document.documentElement.classList.contains('dark');
-    
-    // 画面のチラつきやレイアウト崩れを隠すためのオーバーレイを表示
+
+    // 画面のチラつきを隠すためのオーバーレイを表示
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed';
     overlay.style.inset = '0';
@@ -66,33 +66,70 @@ export default function QuoteDetail() {
         document.documentElement.classList.remove('dark');
       }
 
-      // PDF用にデスクトップ幅を強制（レスポンシブによるレイアウト崩れを防止）
+      // PDF用にデスクトップ幅を強制
       element.style.width = '800px';
       element.style.maxWidth = '800px';
       element.style.margin = '0 auto';
 
       // スタイル適用待ち
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // dom-to-image-moreで画像化（scaleによる崩れを防ぐため等倍で取得）
-      const imgData = await domtoimage.toPng(element, {
-        bgcolor: '#ffffff',
-        width: 800,
-        height: element.offsetHeight
+      // html2canvasで高品質キャプチャ
+      const scale = 2;
+      const canvas = await html2canvas(element, {
+        scale,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
       });
 
+      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (element.offsetHeight * pdfWidth) / 800;
+      const pdfPageHeight = pdf.internal.pageSize.getHeight();
 
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      // キャンバスの実際のサイズからPDF上の高さを算出
+      const imgWidthPx = canvas.width;
+      const imgHeightPx = canvas.height;
+      const pdfImgHeight = (imgHeightPx * pdfWidth) / imgWidthPx;
+
+      if (pdfImgHeight <= pdfPageHeight) {
+        // 1ページに収まる場合
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfImgHeight);
+      } else {
+        // 複数ページに分割
+        const pageCanvasHeight = Math.floor((pdfPageHeight * imgWidthPx) / pdfWidth);
+        let remainingHeight = imgHeightPx;
+        let srcY = 0;
+        let page = 0;
+
+        while (remainingHeight > 0) {
+          const sliceHeight = Math.min(pageCanvasHeight, remainingHeight);
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = imgWidthPx;
+          pageCanvas.height = sliceHeight;
+          const ctx = pageCanvas.getContext('2d');
+          if (!ctx) break;
+
+          ctx.drawImage(canvas, 0, srcY, imgWidthPx, sliceHeight, 0, 0, imgWidthPx, sliceHeight);
+
+          const pageImgData = pageCanvas.toDataURL('image/png');
+          const slicePdfHeight = (sliceHeight * pdfWidth) / imgWidthPx;
+
+          if (page > 0) pdf.addPage();
+          pdf.addImage(pageImgData, 'PNG', 0, 0, pdfWidth, slicePdfHeight);
+
+          srcY += sliceHeight;
+          remainingHeight -= sliceHeight;
+          page++;
+        }
+      }
+
       pdf.save(`quote_${quote.quoteNumber}.pdf`);
-
       toast.success('PDFをダウンロードしました', { id: 'pdf-loading' });
     } catch {
       toast.error('PDFの生成に失敗しました', { id: 'pdf-loading' });
     } finally {
-      // スタイル・ダークモード・オーバーレイを確実に元に戻す
       element.style.width = originalWidth;
       element.style.maxWidth = originalMaxWidth;
       element.style.margin = originalMargin;

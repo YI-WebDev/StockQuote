@@ -24,7 +24,7 @@ export default defineConfig(() => {
           manualChunks: {
             react: ['react', 'react-dom', 'react-router-dom'],
             firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-            pdf: ['jspdf', 'html2canvas', 'dom-to-image-more', 'pdf-lib', '@pdf-lib/fontkit'],
+            pdf: ['jspdf', 'html2canvas', 'pdf-lib', '@pdf-lib/fontkit'],
             excel: ['exceljs', 'file-saver'],
             form: ['react-hook-form', '@hookform/resolvers', 'zod'],
           },
