@@ -452,7 +452,7 @@ export default function ProductList() {
         <div className="hidden md:block">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead>
-              <tr className="bg-gray-50 dark:bg-gray-900/50">
+              <tr className="bg-gray-50 dark:bg-gray-900/50 group/header">
                 <th className="pl-4 pr-2 py-3 rounded-tl-xl w-10">
                   <input
                     ref={selectAllRef}
@@ -460,7 +460,7 @@ export default function ProductList() {
                     checked={allPageSelected}
                     onChange={toggleSelectAll}
                     disabled={paginatedProducts.length === 0}
-                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-default"
+                    className={`w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-default transition-opacity duration-150 ${somePageSelected ? 'opacity-100' : 'opacity-0 group-hover/header:opacity-100'}`}
                   />
                 </th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">コード</th>
@@ -502,12 +502,12 @@ export default function ProductList() {
                     className={`hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group ${selectedIds.has(product.id) ? 'bg-indigo-50/60 dark:bg-indigo-950/30' : ''}`}
                     onClick={() => navigate(`/products/${product.id}`)}
                   >
-                    <td className="pl-4 pr-2 py-3.5 whitespace-nowrap" onClick={(e) => toggleSelect(product.id, e)}>
+                    <td className="pl-4 pr-2 py-3.5 whitespace-nowrap cursor-pointer" onClick={(e) => toggleSelect(product.id, e)}>
                       <input
                         type="checkbox"
                         checked={selectedIds.has(product.id)}
                         onChange={() => {}}
-                        className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        className={`w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer transition-opacity duration-150 ${selectedIds.has(product.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                       />
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-xs text-gray-400 dark:text-gray-500 font-mono">{product.code || '—'}</td>
@@ -605,13 +605,19 @@ export default function ProductList() {
                 >
                   <div className="flex justify-between items-start mb-1.5">
                     <div className="flex items-start gap-2.5 pr-8 flex-1 min-w-0">
-                      <div onClick={(e) => toggleSelect(product.id, e)} className="pt-0.5 shrink-0">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(product.id)}
-                          onChange={() => {}}
-                          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                        />
+                      <div
+                        onClick={(e) => toggleSelect(product.id, e)}
+                        className="pt-0.5 shrink-0 w-5 h-5 flex items-center justify-center"
+                      >
+                        {selectedIds.has(product.id) ? (
+                          <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center">
+                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors" />
+                        )}
                       </div>
                       <div className="min-w-0">
                       {product.code && <div className="text-xs text-gray-400 dark:text-gray-500 font-mono mb-0.5">{product.code}</div>}
