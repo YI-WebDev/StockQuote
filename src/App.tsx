@@ -19,7 +19,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 export default function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Toaster position="top-right" />
         <Routes>
           <Route path="/" element={<Layout />}>
