@@ -2,27 +2,17 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { ArrowLeft, Edit, Trash2, Package, Tag, FileText, DollarSign, Boxes } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Package, Tag, FileText, DollarSign, Boxes, FolderOpen } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../components/Spinner';
 import ConfirmModal from '../../components/ConfirmModal';
-
-type Product = {
-  id: string;
-  code: string | null;
-  name: string;
-  manufacturer: string | null;
-  price: number;
-  stock: number;
-  unit: string | null;
-  tags: string[];
-  note: string | null;
-};
+import type { Product } from '../../types/models';
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
+  const [groupName, setGroupName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -35,7 +25,16 @@ export default function ProductDetail() {
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-          setProduct({ id: docSnap.id, ...docSnap.data() } as Product);
+          const productData = { id: docSnap.id, ...docSnap.data() } as Product;
+          setProduct(productData);
+          
+          if (productData.groupId) {
+            const groupRef = doc(db, 'productGroups', productData.groupId);
+            const groupSnap = await getDoc(groupRef);
+            if (groupSnap.exists()) {
+              setGroupName(groupSnap.data().name);
+            }
+          }
         } else {
           setError('商品が見つかりません');
         }
@@ -154,6 +153,21 @@ export default function ProductDetail() {
 
       {/* Details card */}
       <div className="card divide-y divide-gray-100 dark:divide-gray-700/60">
+        {/* Group */}
+        <div className="px-6 py-4">
+          <div className="flex items-center gap-2 mb-3">
+            <FolderOpen className="w-4 h-4 text-gray-400" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">グループ</span>
+          </div>
+          {groupName ? (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+              {groupName}
+            </span>
+          ) : (
+            <span className="text-sm text-gray-400 dark:text-gray-500">未分類</span>
+          )}
+        </div>
+
         {/* Tags */}
         <div className="px-6 py-4">
           <div className="flex items-center gap-2 mb-3">
