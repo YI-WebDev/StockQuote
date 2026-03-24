@@ -16,5 +16,19 @@ export default defineConfig(() => {
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
     },
+    build: {
+      chunkSizeWarningLimit: 1200,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            react: ['react', 'react-dom', 'react-router-dom'],
+            firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+            pdf: ['jspdf', 'html2canvas', 'dom-to-image-more', 'pdf-lib', '@pdf-lib/fontkit'],
+            excel: ['exceljs', 'file-saver'],
+            form: ['react-hook-form', '@hookform/resolvers', 'zod'],
+          },
+        },
+      },
+    },
   };
 });
