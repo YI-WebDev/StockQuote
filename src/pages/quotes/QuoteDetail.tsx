@@ -9,27 +9,7 @@ import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import domtoimage from 'dom-to-image-more';
 import { jsPDF } from 'jspdf';
-
-type QuoteDetail = {
-  id: string;
-  quoteNumber: string;
-  subject: string;
-  customerName: string;
-  issueDate: string;
-  expiryDate: string | null;
-  note: string | null;
-  subtotal: number;
-  tax: number;
-  total: number;
-  items: {
-    productId: string;
-    productName: string;
-    manufacturer: string | null;
-    price: number;
-    quantity: number;
-    amount: number;
-  }[];
-};
+import type { QuoteDetail } from '../../types/models';
 
 export default function QuoteDetail() {
   const { id } = useParams();

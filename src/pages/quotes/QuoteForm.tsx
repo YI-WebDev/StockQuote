@@ -7,31 +7,16 @@ import { Plus, Trash2, Search } from 'lucide-react';
 import ProductSelectModal from './ProductSelectModal';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { generateQuoteNumber } from '../../lib/quoteNumber';
+import { calculateItemAmount, calculateQuoteTotals } from '../../lib/quoteCalculations';
 import { TAX_RATE } from '../../config/constants';
-
-type ProductForSelect = {
-  id: string;
-  name: string;
-  manufacturer: string | null;
-  price: number;
-};
+import type { ProductForSelect } from '../../types/models';
 
 type Props = {
   defaultValues?: Partial<QuoteFormValues>;
   onSubmit: (data: QuoteFormValues) => Promise<void>;
   isSubmitting: boolean;
 };
-
-function generateQuoteNumber(): string {
-  const now = new Date();
-  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-  const randomPart = Array.from(crypto.getRandomValues(new Uint8Array(3)))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-    .toUpperCase()
-    .slice(0, 4);
-  return `EST-${datePart}-${randomPart}`;
-}
 
 export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Props) {
   const navigate = useNavigate();
@@ -43,11 +28,7 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
   useEffect(() => {
     const q = query(collection(db, 'products'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const productsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as ProductForSelect[];
-      setProducts(productsData);
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ProductForSelect[]);
     });
     return () => unsubscribe();
   }, []);
@@ -87,24 +68,17 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
 
   // Auto-calculate amounts
   useEffect(() => {
-    let newSubtotal = 0;
     items.forEach((item, index) => {
-      const price = Number(item.price) || 0;
-      const quantity = Number(item.quantity) || 0;
-      const amount = price * quantity;
-
+      const amount = calculateItemAmount(item.price, item.quantity);
       if (item.amount !== amount) {
         setValue(`items.${index}.amount`, amount);
       }
-      newSubtotal += amount;
     });
 
-    const newTax = Math.floor(newSubtotal * TAX_RATE);
-    const newTotal = newSubtotal + newTax;
-
-    setValue('subtotal', newSubtotal);
-    setValue('tax', newTax);
-    setValue('total', newTotal);
+    const totals = calculateQuoteTotals(items);
+    setValue('subtotal', totals.subtotal);
+    setValue('tax', totals.tax);
+    setValue('total', totals.total);
   }, [items, setValue]);
 
   const handleProductSelect = (product: ProductForSelect, index: number) => {
