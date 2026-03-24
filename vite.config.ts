@@ -5,7 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: process.env.GITHUB_ACTIONS ? '/stockquote/' : '/',
+    base: process.env.GITHUB_ACTIONS ? '/StockQuote/' : '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
