@@ -1,34 +1,23 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Edit, Trash2, MoreVertical, Upload, Download,
   Settings, Package, TrendingUp, Layers, X,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { collection, query, onSnapshot, doc, deleteDoc, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, deleteDoc, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase';
 import Spinner from '../../components/Spinner';
 import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
-import Papa from 'papaparse';
-import { ITEMS_PER_PAGE, BATCH_COMMIT_SIZE } from '../../config/constants';
-
-type Product = {
-  id: string;
-  code: string | null;
-  name: string;
-  manufacturer: string | null;
-  price: number;
-  stock: number;
-  unit: string | null;
-  tags: string[];
-  note?: string;
-};
+import { ITEMS_PER_PAGE } from '../../config/constants';
+import { importCsvToFirestore, downloadCsvWithBom } from '../../lib/csv';
+import { useOutsideClick } from '../../hooks/useOutsideClick';
+import type { Product } from '../../types/models';
 
 export default function ProductList() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
-  const [tags, setTags] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [manufacturer, setManufacturer] = useState('');
   const [selectedTag, setSelectedTag] = useState('');
@@ -37,97 +26,103 @@ export default function ProductList() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = ITEMS_PER_PAGE;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  useOutsideClick([
+    { selector: ['.dropdown-container', '.dropdown-trigger'], onOutside: () => setOpenDropdownId(null) },
+    { selector: '.settings-dropdown-container', onOutside: () => setIsSettingsOpen(false) },
+  ]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[]);
+      setLoading(false);
+    }, () => {
+      setError('商品の取得に失敗しました');
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const tags = useMemo(() => {
+    const allTags = new Set<string>();
+    products.forEach(p => p.tags?.forEach(t => allTags.add(t)));
+    return Array.from(allTags).sort();
+  }, [products]);
+
+  const filteredProducts = useMemo(() => products.filter(p => {
+    const matchSearch = search ? p.name.toLowerCase().includes(search.toLowerCase()) : true;
+    const matchManufacturer = manufacturer ? (p.manufacturer || '').toLowerCase().includes(manufacturer.toLowerCase()) : true;
+    const matchTag = selectedTag ? (p.tags || []).includes(selectedTag) : true;
+    return matchSearch && matchManufacturer && matchTag;
+  }), [products, search, manufacturer, selectedTag]);
+
+  const totalValue = useMemo(() => products.reduce((sum, p) => sum + p.price * p.stock, 0), [products]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, manufacturer, selectedTag]);
+
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const isFiltered = search || manufacturer || selectedTag;
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
     toast.loading('インポート中...', { id: 'import' });
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        try {
-          let batch = writeBatch(db);
-          let count = 0;
-          let totalCount = 0;
+    try {
+      const totalCount = await importCsvToFirestore(file, 'products', (row) => {
+        const name = row['商品名'] || row['name'];
+        const priceStr = row['単価'] || row['price'];
+        const stockStr = row['在庫数'] || row['stock'];
 
-          for (const row of results.data as Record<string, string>[]) {
-            const name = row['商品名'] || row['name'];
-            const priceStr = row['単価'] || row['price'];
-            const stockStr = row['在庫数'] || row['stock'];
+        if (!name || priceStr === undefined || stockStr === undefined) return null;
 
-            if (!name || priceStr === undefined || stockStr === undefined) {
-              continue;
-            }
+        const price = Number(priceStr);
+        const stock = Number(stockStr);
 
-            const price = Number(priceStr);
-            const stock = Number(stockStr);
+        if (isNaN(price) || isNaN(stock) || price < 0 || stock < 0 || price > 99_999_999) return null;
 
-            if (isNaN(price) || isNaN(stock) || price < 0 || stock < 0 || price > 99_999_999) {
-              continue;
-            }
+        return {
+          code: row['商品コード'] || row['code'] || '',
+          name,
+          manufacturer: row['メーカー'] || row['manufacturer'] || '',
+          price,
+          stock,
+          unit: row['単位'] || row['unit'] || '',
+          tags: (row['タグ'] || row['tags'] || '').split(',').map((t: string) => t.trim()).filter(Boolean),
+          note: row['備考'] || row['note'] || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      });
 
-            const newDocRef = doc(collection(db, 'products'));
-            batch.set(newDocRef, {
-              code: row['商品コード'] || row['code'] || '',
-              name: name,
-              manufacturer: row['メーカー'] || row['manufacturer'] || '',
-              price: price,
-              stock: stock,
-              unit: row['単位'] || row['unit'] || '',
-              tags: (row['タグ'] || row['tags'] || '').split(',').map((t: string) => t.trim()).filter(Boolean),
-              note: row['備考'] || row['note'] || '',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            });
-
-            count++;
-            totalCount++;
-
-            if (count === BATCH_COMMIT_SIZE) {
-              await batch.commit();
-              batch = writeBatch(db);
-              count = 0;
-            }
-          }
-
-          if (count > 0) {
-            await batch.commit();
-          }
-
-          if (totalCount > 0) {
-            toast.success(`${totalCount}件の商品をインポートしました`, { id: 'import' });
-          } else {
-            toast.error('有効なデータが見つかりませんでした', { id: 'import' });
-          }
-        } catch {
-          toast.error('インポート中にエラーが発生しました', { id: 'import' });
-        } finally {
-          setIsImporting(false);
-          if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-          }
-        }
-      },
-      error: () => {
-        toast.error('CSVの読み込みに失敗しました', { id: 'import' });
-        setIsImporting(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+      if (totalCount > 0) {
+        toast.success(`${totalCount}件の商品をインポートしました`, { id: 'import' });
+      } else {
+        toast.error('有効なデータが見つかりませんでした', { id: 'import' });
       }
-    });
+    } catch {
+      toast.error('インポート中にエラーが発生しました', { id: 'import' });
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleExportClick = () => {
@@ -135,77 +130,25 @@ export default function ProductList() {
       toast.error('エクスポートするデータがありません');
       return;
     }
-
     try {
-      const exportData = filteredProducts.map(p => ({
-        '商品コード': p.code || '',
-        '商品名': p.name,
-        'メーカー': p.manufacturer || '',
-        '単価': p.price,
-        '在庫数': p.stock,
-        '単位': p.unit || '',
-        'タグ': p.tags ? p.tags.join(', ') : '',
-        '備考': p.note || ''
-      }));
-
-      const csv = Papa.unparse(exportData);
-      const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-      const blob = new Blob([bom, csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `products_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
+      downloadCsvWithBom(
+        filteredProducts.map(p => ({
+          '商品コード': p.code || '',
+          '商品名': p.name,
+          'メーカー': p.manufacturer || '',
+          '単価': p.price,
+          '在庫数': p.stock,
+          '単位': p.unit || '',
+          'タグ': p.tags ? p.tags.join(', ') : '',
+          '備考': p.note || '',
+        })),
+        `products_${new Date().toISOString().split('T')[0]}.csv`
+      );
       toast.success('CSVをエクスポートしました');
     } catch {
       toast.error('エクスポートに失敗しました');
     }
   };
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.dropdown-container') && !target.closest('.dropdown-trigger')) {
-        setOpenDropdownId(null);
-      }
-      if (!target.closest('.settings-dropdown-container')) {
-        setIsSettingsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const productsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Product[];
-
-      setProducts(productsData);
-
-      const allTags = new Set<string>();
-      productsData.forEach(p => {
-        if (p.tags) {
-          p.tags.forEach(t => allTags.add(t));
-        }
-      });
-      setTags(Array.from(allTags).sort());
-
-      setLoading(false);
-    }, () => {
-      setError("商品の取得に失敗しました");
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -218,26 +161,6 @@ export default function ProductList() {
       setDeleteId(null);
     }
   };
-
-  const filteredProducts = products.filter(p => {
-    const matchSearch = search ? p.name.toLowerCase().includes(search.toLowerCase()) : true;
-    const matchManufacturer = manufacturer ? (p.manufacturer || '').toLowerCase().includes(manufacturer.toLowerCase()) : true;
-    const matchTag = selectedTag ? (p.tags || []).includes(selectedTag) : true;
-    return matchSearch && matchManufacturer && matchTag;
-  });
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, manufacturer, selectedTag]);
-
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-  const paginatedProducts = filteredProducts.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
-  const totalValue = products.reduce((sum, p) => sum + p.price * p.stock, 0);
-  const isFiltered = search || manufacturer || selectedTag;
 
   return (
     <div className="space-y-6">
@@ -623,7 +546,7 @@ export default function ProductList() {
             currentPage={currentPage}
             totalPages={totalPages}
             totalItems={filteredProducts.length}
-            itemsPerPage={itemsPerPage}
+            itemsPerPage={ITEMS_PER_PAGE}
             onPageChange={setCurrentPage}
           />
         )}

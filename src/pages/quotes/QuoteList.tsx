@@ -1,41 +1,20 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Edit, Trash2, Eye, Upload, Download,
   Settings, MoreVertical, FileText, DollarSign, CalendarDays, X,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { collection, query, onSnapshot, doc, deleteDoc, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, deleteDoc, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase';
 import Spinner from '../../components/Spinner';
 import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
-import Papa from 'papaparse';
-import { ITEMS_PER_PAGE, BATCH_COMMIT_SIZE } from '../../config/constants';
-
-type Quote = {
-  id: string;
-  quoteNumber: string;
-  subject: string;
-  customerName: string;
-  issueDate: string;
-  expiryDate: string | null;
-  subtotal: number;
-  tax: number;
-  total: number;
-  note: string | null;
-};
-
-function generateQuoteNumber(): string {
-  const now = new Date();
-  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-  const randomPart = Array.from(crypto.getRandomValues(new Uint8Array(3)))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-    .toUpperCase()
-    .slice(0, 4);
-  return `EST-${datePart}-${randomPart}`;
-}
+import { ITEMS_PER_PAGE } from '../../config/constants';
+import { importCsvToFirestore, downloadCsvWithBom } from '../../lib/csv';
+import { generateQuoteNumber } from '../../lib/quoteNumber';
+import { useOutsideClick } from '../../hooks/useOutsideClick';
+import type { Quote } from '../../types/models';
 
 export default function QuoteList() {
   const navigate = useNavigate();
@@ -46,106 +25,102 @@ export default function QuoteList() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = ITEMS_PER_PAGE;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  useOutsideClick([
+    { selector: ['.dropdown-container', '.dropdown-trigger'], onOutside: () => setOpenDropdownId(null) },
+    { selector: '.settings-dropdown-container', onOutside: () => setIsSettingsOpen(false) },
+  ]);
+
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.dropdown-container') && !target.closest('.dropdown-trigger')) {
-        setOpenDropdownId(null);
-      }
-      if (!target.closest('.settings-dropdown-container')) {
-        setIsSettingsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    const q = query(collection(db, 'quotes'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setQuotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Quote[]);
+      setLoading(false);
+    }, () => {
+      setError('見積の取得に失敗しました');
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
+
+  const filteredQuotes = useMemo(() => quotes.filter(q => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return (
+      q.quoteNumber.toLowerCase().includes(s) ||
+      q.subject.toLowerCase().includes(s) ||
+      q.customerName.toLowerCase().includes(s)
+    );
+  }), [quotes, search]);
+
+  const totalAmount = useMemo(() => quotes.reduce((sum, q) => sum + q.total, 0), [quotes]);
+
+  const thisMonthQuotes = useMemo(() => {
+    const now = new Date();
+    return quotes.filter(q => {
+      const d = new Date(q.issueDate);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    });
+  }, [quotes]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  const totalPages = Math.ceil(filteredQuotes.length / ITEMS_PER_PAGE);
+  const paginatedQuotes = filteredQuotes.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
     toast.loading('インポート中...', { id: 'import' });
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        try {
-          let batch = writeBatch(db);
-          let count = 0;
-          let totalCount = 0;
+    try {
+      const totalCount = await importCsvToFirestore(file, 'quotes', (row) => {
+        const subject = row['件名'] || row['subject'];
+        const customerName = row['宛名'] || row['customerName'];
 
-          for (const row of results.data as Record<string, string>[]) {
-            const quoteNumber = row['見積番号'] || row['quoteNumber'];
-            const subject = row['件名'] || row['subject'];
-            const customerName = row['宛名'] || row['customerName'];
+        if (!subject || !customerName) return null;
 
-            if (!subject || !customerName) {
-              continue;
-            }
+        return {
+          quoteNumber: row['見積番号'] || row['quoteNumber'] || generateQuoteNumber(),
+          subject,
+          customerName,
+          issueDate: row['発行日'] || row['issueDate'] || new Date().toISOString().split('T')[0],
+          expiryDate: row['有効期限'] || row['expiryDate'] || '',
+          subtotal: Number(row['小計'] || row['subtotal']) || 0,
+          tax: Number(row['消費税'] || row['tax']) || 0,
+          total: Number(row['合計'] || row['total']) || 0,
+          note: row['備考'] || row['note'] || '',
+          items: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      });
 
-            const newDocRef = doc(collection(db, 'quotes'));
-            batch.set(newDocRef, {
-              quoteNumber: quoteNumber || generateQuoteNumber(),
-              subject: subject,
-              customerName: customerName,
-              issueDate: row['発行日'] || row['issueDate'] || new Date().toISOString().split('T')[0],
-              expiryDate: row['有効期限'] || row['expiryDate'] || '',
-              subtotal: Number(row['小計'] || row['subtotal']) || 0,
-              tax: Number(row['消費税'] || row['tax']) || 0,
-              total: Number(row['合計'] || row['total']) || 0,
-              note: row['備考'] || row['note'] || '',
-              items: [],
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            });
-
-            count++;
-            totalCount++;
-
-            if (count === BATCH_COMMIT_SIZE) {
-              await batch.commit();
-              batch = writeBatch(db);
-              count = 0;
-            }
-          }
-
-          if (count > 0) {
-            await batch.commit();
-          }
-
-          if (totalCount > 0) {
-            toast.success(`${totalCount}件の見積をインポートしました`, { id: 'import' });
-          } else {
-            toast.error('有効なデータが見つかりませんでした', { id: 'import' });
-          }
-        } catch {
-          toast.error('インポート中にエラーが発生しました', { id: 'import' });
-        } finally {
-          setIsImporting(false);
-          if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-          }
-        }
-      },
-      error: () => {
-        toast.error('CSVの読み込みに失敗しました', { id: 'import' });
-        setIsImporting(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+      if (totalCount > 0) {
+        toast.success(`${totalCount}件の見積をインポートしました`, { id: 'import' });
+      } else {
+        toast.error('有効なデータが見つかりませんでした', { id: 'import' });
       }
-    });
+    } catch {
+      toast.error('インポート中にエラーが発生しました', { id: 'import' });
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleExportClick = () => {
@@ -153,54 +128,26 @@ export default function QuoteList() {
       toast.error('エクスポートするデータがありません');
       return;
     }
-
     try {
-      const exportData = filteredQuotes.map(q => ({
-        '見積番号': q.quoteNumber || '',
-        '件名': q.subject || '',
-        '宛名': q.customerName || '',
-        '発行日': q.issueDate || '',
-        '有効期限': q.expiryDate || '',
-        '小計': q.subtotal || 0,
-        '消費税': q.tax || 0,
-        '合計': q.total || 0,
-        '備考': q.note || ''
-      }));
-
-      const csv = Papa.unparse(exportData);
-      const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-      const blob = new Blob([bom, csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `quotes_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
+      downloadCsvWithBom(
+        filteredQuotes.map(q => ({
+          '見積番号': q.quoteNumber || '',
+          '件名': q.subject || '',
+          '宛名': q.customerName || '',
+          '発行日': q.issueDate || '',
+          '有効期限': q.expiryDate || '',
+          '小計': q.subtotal || 0,
+          '消費税': q.tax || 0,
+          '合計': q.total || 0,
+          '備考': q.note || '',
+        })),
+        `quotes_${new Date().toISOString().split('T')[0]}.csv`
+      );
       toast.success('CSVをエクスポートしました');
     } catch {
       toast.error('エクスポートに失敗しました');
     }
   };
-
-  useEffect(() => {
-    const q = query(collection(db, 'quotes'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const quotesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Quote[];
-      setQuotes(quotesData);
-      setLoading(false);
-    }, () => {
-      setError("見積の取得に失敗しました");
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -213,33 +160,6 @@ export default function QuoteList() {
       setDeleteId(null);
     }
   };
-
-  const filteredQuotes = quotes.filter(q => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return (
-      q.quoteNumber.toLowerCase().includes(s) ||
-      q.subject.toLowerCase().includes(s) ||
-      q.customerName.toLowerCase().includes(s)
-    );
-  });
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search]);
-
-  const totalPages = Math.ceil(filteredQuotes.length / itemsPerPage);
-  const paginatedQuotes = filteredQuotes.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
-  const totalAmount = quotes.reduce((sum, q) => sum + q.total, 0);
-  const thisMonthQuotes = quotes.filter(q => {
-    const d = new Date(q.issueDate);
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  });
 
   return (
     <div className="space-y-6">
@@ -571,7 +491,7 @@ export default function QuoteList() {
             currentPage={currentPage}
             totalPages={totalPages}
             totalItems={filteredQuotes.length}
-            itemsPerPage={itemsPerPage}
+            itemsPerPage={ITEMS_PER_PAGE}
             onPageChange={setCurrentPage}
           />
         )}
