@@ -1,4 +1,4 @@
-# 在庫・見積管理アプリ (React + Express + Prisma)
+# 在庫・見積管理アプリ (React + Express + Firebase)
 
 このプロジェクトは、在庫管理と見積作成を連携して行えるシンプルなWebアプリケーションです。
 
@@ -19,11 +19,11 @@
 
 ## 技術スタック
 
-- **フロントエンド**: React 18, React Router, Tailwind CSS, React Hook Form, Zod, Lucide React, react-hot-toast
+- **フロントエンド**: React 19, React Router, Tailwind CSS, React Hook Form, Zod, Lucide React, react-hot-toast
 - **バックエンド**: Node.js, Express
-- **データベース**: SQLite, Prisma ORM
+- **データベース**: Firebase Firestore
 - **ビルドツール**: Vite
-- **出力機能**: html2canvas, jsPDF, xlsx
+- **出力機能**: html2canvas, jsPDF, pdf-lib, exceljs
 
 ## 起動手順
 
@@ -34,12 +34,8 @@
    npm install
    ```
 
-2. **データベースのセットアップ**
-   SQLiteデータベースを作成し、初期データ（シード）を投入します。
-   ```bash
-   npm run db:push
-   npm run db:seed
-   ```
+2. **Firebase の設定**
+   Firebase プロジェクトの設定値を `firebase-applet-config.json` に設定してください。
 
 3. **開発サーバーの起動**
    ```bash
@@ -54,6 +50,8 @@
 - **QuoteItem (見積明細)**: `id`, `quoteId`, `productId`, `productName`, `manufacturer`, `price`, `quantity`, `amount`, `createdAt`, `updatedAt`
 
 ## API エンドポイント
+
+- `GET /api/health` : ヘルスチェック
 
 - **Products**
   - `GET /api/products` : 商品一覧取得
