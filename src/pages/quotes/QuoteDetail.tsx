@@ -7,7 +7,7 @@ import { db } from '../../firebase';
 import Spinner from '../../components/Spinner';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import html2canvas from 'html2canvas';
+import domtoimage from 'dom-to-image-more';
 import { jsPDF } from 'jspdf';
 
 type QuoteDetail = {
@@ -62,35 +62,76 @@ export default function QuoteDetail() {
     if (!element || !quote) return;
     
     toast.loading('PDFを生成中...', { id: 'pdf-loading' });
+    
+    const isDark = document.documentElement.classList.contains('dark');
+    
+    // 画面のチラつきやレイアウト崩れを隠すためのオーバーレイを表示
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.backgroundColor = isDark ? '#111827' : '#ffffff';
+    overlay.style.zIndex = '9999';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.color = isDark ? '#ffffff' : '#111827';
+    overlay.innerHTML = '<div style="font-size: 1.25rem; font-weight: bold;">PDFを生成中...</div>';
+    document.body.appendChild(overlay);
+
+    const originalWidth = element.style.width;
+    const originalMaxWidth = element.style.maxWidth;
+    const originalMargin = element.style.margin;
+
     try {
-      // 一時的にダークモードを解除して白背景でキャプチャする
-      const isDark = document.documentElement.classList.contains('dark');
       if (isDark) {
         document.documentElement.classList.remove('dark');
-        await new Promise(resolve => setTimeout(resolve, 100)); // スタイル適用待ち
       }
 
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff'
+      // PDF用にデスクトップ幅を強制（レスポンシブによるレイアウト崩れを防止）
+      element.style.width = '800px';
+      element.style.maxWidth = '800px';
+      element.style.margin = '0 auto';
+
+      // スタイル適用待ち
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // dom-to-image-moreで画像化（scaleによる崩れを防ぐため等倍で取得）
+      const imgData = await domtoimage.toPng(element, {
+        bgcolor: '#ffffff',
+        width: 800,
+        height: element.offsetHeight
       });
+
+      // スタイルを元に戻す
+      element.style.width = originalWidth;
+      element.style.maxWidth = originalMaxWidth;
+      element.style.margin = originalMargin;
 
       if (isDark) {
         document.documentElement.classList.add('dark');
       }
+      document.body.removeChild(overlay);
       
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = (element.offsetHeight * pdfWidth) / 800;
       
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
       pdf.save(`quote_${quote.quoteNumber}.pdf`);
       
       toast.success('PDFをダウンロードしました', { id: 'pdf-loading' });
     } catch (error) {
+      // エラー時も確実に元に戻す
+      element.style.width = originalWidth;
+      element.style.maxWidth = originalMaxWidth;
+      element.style.margin = originalMargin;
+      
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      }
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
       console.error(error);
       toast.error('PDFの生成に失敗しました', { id: 'pdf-loading' });
     }
@@ -103,36 +144,121 @@ export default function QuoteDetail() {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("見積書");
 
+      // Set column widths
       worksheet.columns = [
-        { header: "商品名", key: "productName", width: 30 },
-        { header: "メーカー", key: "manufacturer", width: 20 },
-        { header: "単価", key: "price", width: 15 },
-        { header: "数量", key: "quantity", width: 10 },
-        { header: "金額", key: "amount", width: 15 },
+        { key: "col1", width: 40 }, // 商品名
+        { key: "col2", width: 20 }, // メーカー
+        { key: "col3", width: 15 }, // 単価
+        { key: "col4", width: 10 }, // 数量
+        { key: "col5", width: 15 }, // 金額
       ];
 
-      worksheet.insertRow(1, ["見積書"]);
-      worksheet.insertRow(2, [`見積番号: ${quote.quoteNumber}`]);
-      worksheet.insertRow(3, [`件名: ${quote.subject}`]);
-      worksheet.insertRow(4, [`宛名: ${quote.customerName} 御中`]);
-      worksheet.insertRow(5, []);
+      // Title
+      worksheet.mergeCells('A2:E2');
+      const titleCell = worksheet.getCell('A2');
+      titleCell.value = "御 見 積 書";
+      titleCell.font = { size: 20, bold: true, name: 'ＭＳ ゴシック' };
+      titleCell.alignment = { horizontal: 'center' };
 
-      worksheet.getRow(6).values = ["商品名", "メーカー", "単価", "数量", "金額"];
+      // Customer & Quote Info
+      worksheet.getCell('A4').value = `${quote.customerName} 御中`;
+      worksheet.getCell('A4').font = { size: 14, bold: true, underline: true, name: 'ＭＳ ゴシック' };
+      
+      worksheet.getCell('D4').value = `見積番号: ${quote.quoteNumber}`;
+      worksheet.getCell('D4').alignment = { horizontal: 'right' };
+      
+      worksheet.getCell('A5').value = `件名: ${quote.subject}`;
+      worksheet.getCell('D5').value = `作成日: ${new Date(quote.issueDate).toLocaleDateString('ja-JP')}`;
+      worksheet.getCell('D5').alignment = { horizontal: 'right' };
+      
+      worksheet.getCell('A6').value = `有効期限: ${quote.expiryDate ? new Date(quote.expiryDate).toLocaleDateString('ja-JP') : '設定なし'}`;
 
-      quote.items.forEach((item) => {
-        worksheet.addRow({
-          productName: item.productName,
-          manufacturer: item.manufacturer || "",
-          price: item.price,
-          quantity: item.quantity,
-          amount: item.amount,
-        });
+      // Total Amount
+      worksheet.getCell('A8').value = "下記の通り御見積申し上げます。";
+      
+      worksheet.mergeCells('A9:C9');
+      const totalAmountCell = worksheet.getCell('A9');
+      totalAmountCell.value = `御見積合計金額: ¥${quote.total.toLocaleString()} (税込)`;
+      totalAmountCell.font = { size: 16, bold: true, name: 'ＭＳ ゴシック' };
+      totalAmountCell.border = { bottom: { style: 'medium' } };
+
+      // Table Header
+      const headerRowIndex = 11;
+      const headers = ["商品名", "メーカー", "単価", "数量", "金額"];
+      headers.forEach((header, index) => {
+        const cell = worksheet.getCell(headerRowIndex, index + 1);
+        cell.value = header;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: index >= 2 ? 'right' : 'left', vertical: 'middle' };
       });
 
-      worksheet.addRow([]);
-      worksheet.addRow(["", "", "", "小計", quote.subtotal]);
-      worksheet.addRow(["", "", "", "消費税(10%)", quote.tax]);
-      worksheet.addRow(["", "", "", "合計", quote.total]);
+      // Table Items
+      let currentRowIndex = headerRowIndex + 1;
+      quote.items.forEach((item) => {
+        const row = worksheet.getRow(currentRowIndex);
+        row.values = [item.productName, item.manufacturer || "", item.price, item.quantity, item.amount];
+        
+        // Apply borders and alignment
+        for (let i = 1; i <= 5; i++) {
+          const cell = row.getCell(i);
+          cell.border = {
+            top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
+          };
+          if (i >= 3) {
+            cell.alignment = { horizontal: 'right' };
+            cell.numFmt = '"¥"#,##0';
+          }
+        }
+        currentRowIndex++;
+      });
+
+      // Summary (Subtotal, Tax, Total)
+      currentRowIndex++;
+      
+      const summaryData = [
+        { label: "小計", value: quote.subtotal },
+        { label: "消費税 (10%)", value: quote.tax },
+        { label: "合計", value: quote.total, bold: true }
+      ];
+
+      summaryData.forEach((data) => {
+        const row = worksheet.getRow(currentRowIndex);
+        row.getCell(4).value = data.label;
+        row.getCell(5).value = data.value;
+        
+        row.getCell(4).alignment = { horizontal: 'left' };
+        row.getCell(5).alignment = { horizontal: 'right' };
+        row.getCell(5).numFmt = '"¥"#,##0';
+        
+        if (data.bold) {
+          row.getCell(4).font = { bold: true };
+          row.getCell(5).font = { bold: true };
+          row.getCell(4).border = { top: { style: 'thin' } };
+          row.getCell(5).border = { top: { style: 'thin' } };
+        }
+        
+        currentRowIndex++;
+      });
+
+      // Notes
+      if (quote.note) {
+        currentRowIndex++;
+        worksheet.mergeCells(currentRowIndex, 1, currentRowIndex, 5);
+        const noteHeaderCell = worksheet.getCell(currentRowIndex, 1);
+        noteHeaderCell.value = "備考";
+        noteHeaderCell.font = { bold: true };
+        noteHeaderCell.border = { top: { style: 'thin' } };
+        
+        currentRowIndex++;
+        worksheet.mergeCells(currentRowIndex, 1, currentRowIndex + 3, 5);
+        const noteCell = worksheet.getCell(currentRowIndex, 1);
+        noteCell.value = quote.note;
+        noteCell.alignment = { wrapText: true, vertical: 'top' };
+      }
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -155,7 +281,7 @@ export default function QuoteDetail() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex justify-between items-center print:hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center print:hidden">
         <button
           onClick={() => navigate('/quotes')}
           className="inline-flex items-center text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
@@ -163,34 +289,34 @@ export default function QuoteDetail() {
           <ArrowLeft className="w-4 h-4 mr-1" />
           戻る
         </button>
-        <div className="space-x-3 flex">
+        <div className="flex flex-wrap gap-3 justify-end mt-4 sm:mt-0">
           <button
             onClick={handleExcelDownload}
-            className="inline-flex items-center px-4 py-2 border border-green-600 dark:border-green-500 shadow-sm text-sm font-medium rounded-md text-green-700 dark:text-green-400 bg-white dark:bg-gray-800 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
+            className="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 border border-green-600 dark:border-green-500 shadow-sm text-sm font-medium rounded-md text-green-700 dark:text-green-400 bg-white dark:bg-gray-800 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
           >
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
-            Excel
+            <FileSpreadsheet className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Excel</span>
           </button>
           <button
             onClick={handlePdfDownload}
-            className="inline-flex items-center px-4 py-2 border border-red-600 dark:border-red-500 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+            className="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 border border-red-600 dark:border-red-500 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
           >
-            <Download className="w-4 h-4 mr-2" />
-            PDF
+            <Download className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">PDF</span>
           </button>
           <button
             onClick={() => window.print()}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            <Printer className="w-4 h-4 mr-2" />
-            印刷
+            <Printer className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">印刷</span>
           </button>
           <Link
             to={`/quotes/${quote.id}/edit`}
-            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+            className="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
           >
-            <Edit className="w-4 h-4 mr-2" />
-            編集
+            <Edit className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">編集</span>
           </Link>
         </div>
       </div>
@@ -230,13 +356,14 @@ export default function QuoteDetail() {
 
         <div className="mb-8">
           <p className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-600 mb-2">下記の通り御見積申し上げます。</p>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white print:text-gray-900 border-b-2 border-gray-900 dark:border-gray-100 print:border-gray-900 pb-2 inline-block">
+          <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white print:text-gray-900 border-b-2 border-gray-900 dark:border-gray-100 print:border-gray-900 pb-2 inline-block">
             御見積合計金額: ¥{quote.total.toLocaleString()} <span className="text-sm font-normal text-gray-600 dark:text-gray-400 print:text-gray-600">(税込)</span>
           </div>
         </div>
 
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 print:divide-gray-200 border border-gray-200 dark:border-gray-700 print:border-gray-200 mb-8">
-          <thead className="bg-gray-50 dark:bg-gray-900/50 print:bg-gray-50">
+        <div className="overflow-x-auto mb-8">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 print:divide-gray-200 border border-gray-200 dark:border-gray-700 print:border-gray-200">
+            <thead className="bg-gray-50 dark:bg-gray-900/50 print:bg-gray-50">
             <tr>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">商品名</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">メーカー</th>
@@ -257,6 +384,7 @@ export default function QuoteDetail() {
             ))}
           </tbody>
         </table>
+        </div>
 
         <div className="flex justify-end mb-8">
           <div className="w-64 space-y-2">

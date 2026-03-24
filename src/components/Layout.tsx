@@ -13,9 +13,10 @@ export default function Layout() {
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400">商品・見積管理</span>
+                <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400 hidden sm:block">商品・見積管理</span>
+                <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400 sm:hidden">管理</span>
               </div>
-              <nav className="ml-6 flex space-x-8">
+              <nav className="ml-4 sm:ml-6 flex space-x-4 sm:space-x-8">
                 <Link
                   to="/products"
                   className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors ${
@@ -24,8 +25,9 @@ export default function Layout() {
                       : 'border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                 >
-                  <Package className="w-4 h-4 mr-2" />
-                  商品マスタ
+                  <Package className="w-4 h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">商品マスタ</span>
+                  <span className="sm:hidden">商品</span>
                 </Link>
                 <Link
                   to="/quotes"
@@ -35,8 +37,9 @@ export default function Layout() {
                       : 'border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                 >
-                  <FileText className="w-4 h-4 mr-2" />
-                  見積管理
+                  <FileText className="w-4 h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">見積管理</span>
+                  <span className="sm:hidden">見積</span>
                 </Link>
               </nav>
             </div>
