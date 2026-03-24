@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, Printer, Download, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, CreditCard as Edit, Printer, Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -289,92 +289,106 @@ export default function QuoteDetail() {
         </div>
       </div>
 
-      <div id="quote-document" className="bg-white dark:bg-gray-800 p-10 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 print:shadow-none print:border-none print:p-0 print:bg-white transition-colors">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white print:text-gray-900 tracking-wider">御 見 積 書</h1>
+      <div id="quote-document" className="bg-white dark:bg-gray-800 p-10 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 print:shadow-none print:border-none print:p-0 print:bg-white transition-colors" style={{ minWidth: '800px' }}>
+        <div className="text-center mb-10 pb-4 border-b-4 border-gray-900 dark:border-gray-100 print:border-gray-900">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white print:text-gray-900 tracking-widest">御 見 積 書</h1>
         </div>
 
-        <div className="flex justify-between mb-8">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white print:text-gray-900 border-b border-gray-900 dark:border-gray-100 print:border-gray-900 pb-1 mb-4 inline-block min-w-[200px]">
-              {quote.customerName} 御中
-            </h2>
-            <div className="mt-4 space-y-2">
+        <div className="flex justify-between mb-10">
+          <div className="flex-1">
+            <div className="border-2 border-gray-900 dark:border-gray-100 print:border-gray-900 p-4 inline-block min-w-[280px]">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white print:text-gray-900">
+                {quote.customerName} 御中
+              </h2>
+            </div>
+            <div className="mt-6 space-y-3 ml-2">
+              <div className="border border-gray-300 dark:border-gray-600 print:border-gray-300 p-2">
+                <p className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-600">
+                  <span className="inline-block font-semibold mr-2">件名:</span>
+                  <span className="font-medium text-gray-900 dark:text-white print:text-gray-900">{quote.subject}</span>
+                </p>
+              </div>
+              <div className="border border-gray-300 dark:border-gray-600 print:border-gray-300 p-2">
+                <p className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-600">
+                  <span className="inline-block font-semibold mr-2">有効期限:</span>
+                  <span className="text-gray-900 dark:text-white print:text-gray-900">
+                    {quote.expiryDate ? new Date(quote.expiryDate).toLocaleDateString('ja-JP') : '設定なし'}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="text-right space-y-3">
+            <div className="border border-gray-300 dark:border-gray-600 print:border-gray-300 p-2 min-w-[280px]">
               <p className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-600">
-                <span className="inline-block w-20">件名:</span>
-                <span className="font-medium text-gray-900 dark:text-white print:text-gray-900">{quote.subject}</span>
+                <span className="font-semibold">見積番号: </span>
+                <span className="font-medium text-gray-900 dark:text-white print:text-gray-900">{quote.quoteNumber}</span>
               </p>
+            </div>
+            <div className="border border-gray-300 dark:border-gray-600 print:border-gray-300 p-2">
               <p className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-600">
-                <span className="inline-block w-20">有効期限:</span>
-                <span className="text-gray-900 dark:text-white print:text-gray-900">
-                  {quote.expiryDate ? new Date(quote.expiryDate).toLocaleDateString('ja-JP') : '設定なし'}
-                </span>
+                <span className="font-semibold">作成日: </span>
+                <span className="text-gray-900 dark:text-white print:text-gray-900">{new Date(quote.issueDate).toLocaleDateString('ja-JP')}</span>
               </p>
             </div>
           </div>
-          <div className="text-right space-y-1">
-            <p className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-600">
-              見積番号: <span className="font-medium text-gray-900 dark:text-white print:text-gray-900">{quote.quoteNumber}</span>
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-600">
-              作成日: <span className="text-gray-900 dark:text-white print:text-gray-900">{new Date(quote.issueDate).toLocaleDateString('ja-JP')}</span>
-            </p>
+        </div>
+
+        <div className="mb-10">
+          <p className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-600 mb-4">下記の通り御見積申し上げます。</p>
+          <div className="border-2 border-gray-900 dark:border-gray-100 print:border-gray-900 p-4 inline-block">
+            <div className="text-2xl font-bold text-gray-900 dark:text-white print:text-gray-900">
+              御見積合計金額: ¥{quote.total.toLocaleString()} <span className="text-base font-normal text-gray-600 dark:text-gray-400 print:text-gray-600">(税込)</span>
+            </div>
           </div>
         </div>
 
-        <div className="mb-8">
-          <p className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-600 mb-2">下記の通り御見積申し上げます。</p>
-          <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white print:text-gray-900 border-b-2 border-gray-900 dark:border-gray-100 print:border-gray-900 pb-2 inline-block">
-            御見積合計金額: ¥{quote.total.toLocaleString()} <span className="text-sm font-normal text-gray-600 dark:text-gray-400 print:text-gray-600">(税込)</span>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto mb-8">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 print:divide-gray-200 border border-gray-200 dark:border-gray-700 print:border-gray-200">
-            <thead className="bg-gray-50 dark:bg-gray-900/50 print:bg-gray-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">商品名</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">メーカー</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">単価</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">数量</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider">金額</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-800 print:bg-white divide-y divide-gray-200 dark:divide-gray-700 print:divide-gray-200">
-            {quote.items.map((item, index) => (
-              <tr key={`${item.productId ?? 'item'}-${index}`}>
-                <td className="px-4 py-2 text-sm text-gray-900 dark:text-white print:text-gray-900 border-r dark:border-gray-700 print:border-gray-200">{item.productName}</td>
-                <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 print:text-gray-500 border-r dark:border-gray-700 print:border-gray-200">{item.manufacturer || '-'}</td>
-                <td className="px-4 py-2 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right border-r dark:border-gray-700 print:border-gray-200">¥{item.price.toLocaleString()}</td>
-                <td className="px-4 py-2 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right border-r dark:border-gray-700 print:border-gray-200">{item.quantity.toLocaleString()}</td>
-                <td className="px-4 py-2 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right">¥{item.amount.toLocaleString()}</td>
+        <div className="mb-10">
+          <table className="w-full border-2 border-gray-900 dark:border-gray-700 print:border-gray-900">
+            <thead className="bg-gray-100 dark:bg-gray-900/50 print:bg-gray-100">
+              <tr>
+                <th className="px-4 py-3 text-center text-sm font-bold text-gray-900 dark:text-gray-100 print:text-gray-900 border-r-2 border-gray-900 dark:border-gray-700 print:border-gray-900">商品名</th>
+                <th className="px-4 py-3 text-center text-sm font-bold text-gray-900 dark:text-gray-100 print:text-gray-900 border-r-2 border-gray-900 dark:border-gray-700 print:border-gray-900">メーカー</th>
+                <th className="px-4 py-3 text-center text-sm font-bold text-gray-900 dark:text-gray-100 print:text-gray-900 border-r-2 border-gray-900 dark:border-gray-700 print:border-gray-900">単価</th>
+                <th className="px-4 py-3 text-center text-sm font-bold text-gray-900 dark:text-gray-100 print:text-gray-900 border-r-2 border-gray-900 dark:border-gray-700 print:border-gray-900">数量</th>
+                <th className="px-4 py-3 text-center text-sm font-bold text-gray-900 dark:text-gray-100 print:text-gray-900">金額</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 print:bg-white">
+              {quote.items.map((item, index) => (
+                <tr key={`${item.productId ?? 'item'}-${index}`} className="border-t-2 border-gray-900 dark:border-gray-700 print:border-gray-900">
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-white print:text-gray-900 border-r-2 border-gray-900 dark:border-gray-700 print:border-gray-900">{item.productName}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-white print:text-gray-900 border-r-2 border-gray-900 dark:border-gray-700 print:border-gray-900">{item.manufacturer || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right border-r-2 border-gray-900 dark:border-gray-700 print:border-gray-900">¥{item.price.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right border-r-2 border-gray-900 dark:border-gray-700 print:border-gray-900">{item.quantity.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right">¥{item.amount.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        <div className="flex justify-end mb-8">
-          <div className="w-64 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400 print:text-gray-600">小計</span>
-              <span className="text-gray-900 dark:text-white print:text-gray-900">¥{quote.subtotal.toLocaleString()}</span>
+        <div className="flex justify-end mb-10">
+          <div className="w-80 border-2 border-gray-900 dark:border-gray-700 print:border-gray-900">
+            <div className="flex justify-between px-4 py-3 border-b border-gray-900 dark:border-gray-700 print:border-gray-900">
+              <span className="text-sm font-semibold text-gray-900 dark:text-white print:text-gray-900">小計</span>
+              <span className="text-sm font-semibold text-gray-900 dark:text-white print:text-gray-900">¥{quote.subtotal.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400 print:text-gray-600">消費税 (10%)</span>
-              <span className="text-gray-900 dark:text-white print:text-gray-900">¥{quote.tax.toLocaleString()}</span>
+            <div className="flex justify-between px-4 py-3 border-b border-gray-900 dark:border-gray-700 print:border-gray-900">
+              <span className="text-sm font-semibold text-gray-900 dark:text-white print:text-gray-900">消費税 (10%)</span>
+              <span className="text-sm font-semibold text-gray-900 dark:text-white print:text-gray-900">¥{quote.tax.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-base font-bold border-t border-gray-200 dark:border-gray-700 print:border-gray-200 pt-2">
-              <span className="text-gray-900 dark:text-white print:text-gray-900">合計</span>
-              <span className="text-gray-900 dark:text-white print:text-gray-900">¥{quote.total.toLocaleString()}</span>
+            <div className="flex justify-between px-4 py-3 bg-gray-100 dark:bg-gray-900/50 print:bg-gray-100">
+              <span className="text-base font-bold text-gray-900 dark:text-white print:text-gray-900">合計</span>
+              <span className="text-base font-bold text-gray-900 dark:text-white print:text-gray-900">¥{quote.total.toLocaleString()}</span>
             </div>
           </div>
         </div>
 
         {quote.note && (
-          <div className="border-t border-gray-200 dark:border-gray-700 print:border-gray-200 pt-4">
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 print:text-gray-700 mb-2">備考</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 print:text-gray-600 whitespace-pre-wrap">{quote.note}</p>
+          <div className="border-t-2 border-gray-900 dark:border-gray-700 print:border-gray-900 pt-6">
+            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 print:text-gray-900 mb-3">備考</h3>
+            <p className="text-sm text-gray-700 dark:text-gray-300 print:text-gray-700 whitespace-pre-wrap">{quote.note}</p>
           </div>
         )}
       </div>
