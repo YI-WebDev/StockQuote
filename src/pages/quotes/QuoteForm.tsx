@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { quoteSchema, QuoteFormValues } from '../../lib/validations';
@@ -7,6 +7,14 @@ import { Plus, Trash2, Search } from 'lucide-react';
 import ProductSelectModal from './ProductSelectModal';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { TAX_RATE } from '../../config/constants';
+
+type ProductForSelect = {
+  id: string;
+  name: string;
+  manufacturer: string | null;
+  price: number;
+};
 
 type Props = {
   defaultValues?: Partial<QuoteFormValues>;
@@ -14,13 +22,23 @@ type Props = {
   isSubmitting: boolean;
 };
 
+function generateQuoteNumber(): string {
+  const now = new Date();
+  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const randomPart = Array.from(crypto.getRandomValues(new Uint8Array(3)))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase()
+    .slice(0, 4);
+  return `EST-${datePart}-${randomPart}`;
+}
+
 export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Props) {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<ProductForSelect[]>([]);
   const [activeDropdownIndex, setActiveDropdownIndex] = useState<number | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'products'));
@@ -28,7 +46,7 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
       const productsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })) as ProductForSelect[];
       setProducts(productsData);
     });
     return () => unsubscribe();
@@ -41,9 +59,9 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
     setValue,
     formState: { errors },
   } = useForm<QuoteFormValues>({
-    resolver: zodResolver(quoteSchema) as any,
+    resolver: zodResolver(quoteSchema) as any, // zod v4とreact-hook-formの型不整合を回避
     defaultValues: {
-      quoteNumber: `EST-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+      quoteNumber: generateQuoteNumber(),
       subject: '',
       customerName: '',
       issueDate: new Date().toISOString().split('T')[0],
@@ -62,10 +80,10 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
     name: 'items',
   });
 
-  const items = useWatch({
-    control,
-    name: 'items',
-  });
+  const items = useWatch({ control, name: 'items' });
+  const subtotal = useWatch({ control, name: 'subtotal' });
+  const tax = useWatch({ control, name: 'tax' });
+  const total = useWatch({ control, name: 'total' });
 
   // Auto-calculate amounts
   useEffect(() => {
@@ -74,14 +92,14 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
       const price = Number(item.price) || 0;
       const quantity = Number(item.quantity) || 0;
       const amount = price * quantity;
-      
+
       if (item.amount !== amount) {
         setValue(`items.${index}.amount`, amount);
       }
       newSubtotal += amount;
     });
 
-    const newTax = Math.floor(newSubtotal * 0.1); // 10% tax
+    const newTax = Math.floor(newSubtotal * TAX_RATE);
     const newTotal = newSubtotal + newTax;
 
     setValue('subtotal', newSubtotal);
@@ -89,7 +107,7 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
     setValue('total', newTotal);
   }, [items, setValue]);
 
-  const handleProductSelect = (product: any, index: number) => {
+  const handleProductSelect = (product: ProductForSelect, index: number) => {
     setValue(`items.${index}.productId`, product.id);
     setValue(`items.${index}.productName`, product.name);
     setValue(`items.${index}.manufacturer`, product.manufacturer || '');
@@ -99,10 +117,66 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
     setActiveDropdownIndex(null);
   };
 
-  const handleModalProductSelect = (product: any) => {
+  const handleModalProductSelect = (product: ProductForSelect) => {
     if (activeItemIndex !== null) {
       handleProductSelect(product, activeItemIndex);
     }
+  };
+
+  const renderProductNameCell = (index: number) => {
+    const { onChange, onBlur, name, ref } = register(`items.${index}.productName`);
+    const currentName = items[index]?.productName || '';
+    const showDropdown = activeDropdownIndex === index && currentName.length > 0;
+    const filteredProducts = products.filter(p =>
+      p.name.toLowerCase().includes(currentName.toLowerCase())
+    );
+
+    return (
+      <>
+        <input
+          type="text"
+          name={name}
+          ref={ref}
+          onChange={(e) => {
+            onChange(e);
+            setActiveDropdownIndex(index);
+          }}
+          onBlur={(e) => {
+            onBlur(e);
+            setTimeout(() => setActiveDropdownIndex(null), 150);
+          }}
+          onFocus={() => setActiveDropdownIndex(index)}
+          className="block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          placeholder="商品名を入力"
+          autoComplete="off"
+        />
+        {showDropdown && (
+          <div className="absolute z-50 left-3 right-3 mt-1 bg-white dark:bg-gray-800 shadow-lg rounded-md border border-gray-200 dark:border-gray-700 max-h-60 overflow-auto">
+            {filteredProducts.length > 0 ? (
+              filteredProducts.map(product => (
+                <div
+                  key={product.id}
+                  className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors"
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // Prevent input blur
+                    handleProductSelect(product, index);
+                  }}
+                >
+                  <div className="font-medium text-sm text-gray-900 dark:text-white">{product.name}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    ¥{product.price.toLocaleString()} {product.manufacturer ? `| ${product.manufacturer}` : ''}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                候補が見つかりません
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    );
   };
 
   return (
@@ -110,7 +184,7 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 space-y-6 transition-colors">
           <h2 className="text-lg font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">基本情報</h2>
-          
+
           <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">見積番号 <span className="text-red-500">*</span></label>
@@ -202,63 +276,7 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
                       </button>
                     </td>
                     <td className="px-3 py-2 relative">
-                      {(() => {
-                        const { onChange, onBlur, name, ref } = register(`items.${index}.productName`);
-                        const currentName = items[index]?.productName || '';
-                        const showDropdown = activeDropdownIndex === index && currentName.length > 0;
-                        const filteredProducts = products.filter(p => 
-                          p.name.toLowerCase().includes(currentName.toLowerCase())
-                        );
-
-                        return (
-                          <>
-                            <input
-                              type="text"
-                              name={name}
-                              ref={ref}
-                              onChange={(e) => {
-                                onChange(e);
-                                setActiveDropdownIndex(index);
-                              }}
-                              onBlur={(e) => {
-                                onBlur(e);
-                                setActiveDropdownIndex(null);
-                              }}
-                              onFocus={() => setActiveDropdownIndex(index)}
-                              className="block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                              placeholder="商品名を入力"
-                              autoComplete="off"
-                            />
-                            {showDropdown && (
-                              <div 
-                                className="absolute z-50 left-3 right-3 mt-1 bg-white dark:bg-gray-800 shadow-lg rounded-md border border-gray-200 dark:border-gray-700 max-h-60 overflow-auto"
-                              >
-                                {filteredProducts.length > 0 ? (
-                                  filteredProducts.map(product => (
-                                    <div
-                                      key={product.id}
-                                      className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors"
-                                      onMouseDown={(e) => {
-                                        e.preventDefault(); // Prevent input blur
-                                        handleProductSelect(product, index);
-                                      }}
-                                    >
-                                      <div className="font-medium text-sm text-gray-900 dark:text-white">{product.name}</div>
-                                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                        ¥{product.price.toLocaleString()} {product.manufacturer ? `| ${product.manufacturer}` : ''}
-                                      </div>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
-                                    候補が見つかりません
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
+                      {renderProductNameCell(index)}
                       {errors.items?.[index]?.productName && (
                         <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.items[index]?.productName?.message}</p>
                       )}
@@ -317,15 +335,15 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
             <div className="w-64 space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">小計</span>
-                <span className="text-gray-900 dark:text-white">¥{(items.reduce((acc, item) => acc + (item.amount || 0), 0)).toLocaleString()}</span>
+                <span className="text-gray-900 dark:text-white">¥{(subtotal || 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">消費税 (10%)</span>
-                <span className="text-gray-900 dark:text-white">¥{Math.floor(items.reduce((acc, item) => acc + (item.amount || 0), 0) * 0.1).toLocaleString()}</span>
+                <span className="text-gray-600 dark:text-gray-400">消費税 ({TAX_RATE * 100}%)</span>
+                <span className="text-gray-900 dark:text-white">¥{(tax || 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-base font-bold border-t border-gray-200 dark:border-gray-700 pt-2">
                 <span className="text-gray-900 dark:text-white">合計</span>
-                <span className="text-gray-900 dark:text-white">¥{Math.floor(items.reduce((acc, item) => acc + (item.amount || 0), 0) * 1.1).toLocaleString()}</span>
+                <span className="text-gray-900 dark:text-white">¥{(total || 0).toLocaleString()}</span>
               </div>
             </div>
           </div>

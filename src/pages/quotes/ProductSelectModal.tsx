@@ -12,7 +12,7 @@ type Product = {
   price: number;
   stock: number;
   unit: string | null;
-  tags: { id: string; name: string }[];
+  tags: string[];
 };
 
 type Props = {
@@ -22,13 +22,14 @@ type Props = {
 };
 
 export default function ProductSelectModal({ isOpen, onClose, onSelect }: Props) {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // 初回マウント時のみ全件購読。検索はクライアントサイドフィルタで行う
   useEffect(() => {
     if (!isOpen) return;
-    
+
     setLoading(true);
     const q = query(collection(db, 'products'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -36,21 +37,25 @@ export default function ProductSelectModal({ isOpen, onClose, onSelect }: Props)
         id: doc.id,
         ...doc.data()
       })) as Product[];
-      
-      // Client-side filtering for search
-      const filteredProducts = search
-        ? productsData.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
-        : productsData;
-        
-      setProducts(filteredProducts);
+      setAllProducts(productsData);
       setLoading(false);
-    }, (error) => {
-      console.error("Firestore Error:", error);
+    }, () => {
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [isOpen, search]);
+  }, [isOpen]);
+
+  // モーダルを閉じたとき検索をリセット
+  useEffect(() => {
+    if (!isOpen) {
+      setSearch('');
+    }
+  }, [isOpen]);
+
+  const products = search
+    ? allProducts.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
+    : allProducts;
 
   if (!isOpen) return null;
 
@@ -63,15 +68,20 @@ export default function ProductSelectModal({ isOpen, onClose, onSelect }: Props)
 
         <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-        <div className="relative z-10 inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full border border-gray-200 dark:border-gray-700">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="product-select-title"
+          className="relative z-10 inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full border border-gray-200 dark:border-gray-700"
+        >
           <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4 transition-colors">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">商品を選択</h3>
+              <h3 id="product-select-title" className="text-lg leading-6 font-medium text-gray-900 dark:text-white">商品を選択</h3>
               <button onClick={onClose} className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors">
                 <X className="h-6 w-6" />
               </button>
             </div>
-            
+
             <div className="mb-4 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-5 w-5 text-gray-400" />
@@ -117,9 +127,9 @@ export default function ProductSelectModal({ isOpen, onClose, onSelect }: Props)
                         <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{product.manufacturer || '-'}</td>
                         <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
                           <div className="flex flex-wrap gap-1">
-                            {product.tags?.map((tag) => (
-                              <span key={tag.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
-                                {tag.name}
+                            {product.tags?.map((tag, i) => (
+                              <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                                {tag}
                               </span>
                             ))}
                           </div>

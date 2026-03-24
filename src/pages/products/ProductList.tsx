@@ -8,6 +8,7 @@ import Spinner from '../../components/Spinner';
 import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
 import Papa from 'papaparse';
+import { ITEMS_PER_PAGE, BATCH_COMMIT_SIZE } from '../../config/constants';
 
 type Product = {
   id: string;
@@ -18,6 +19,7 @@ type Product = {
   stock: number;
   unit: string | null;
   tags: string[];
+  note?: string;
 };
 
 export default function ProductList() {
@@ -32,7 +34,7 @@ export default function ProductList() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = ITEMS_PER_PAGE;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -57,11 +59,11 @@ export default function ProductList() {
           let count = 0;
           let totalCount = 0;
 
-          for (const row of results.data as any[]) {
+          for (const row of results.data as Record<string, string>[]) {
             const name = row['商品名'] || row['name'];
             const priceStr = row['単価'] || row['price'];
             const stockStr = row['在庫数'] || row['stock'];
-            
+
             if (!name || priceStr === undefined || stockStr === undefined) {
               continue;
             }
@@ -69,7 +71,7 @@ export default function ProductList() {
             const price = Number(priceStr);
             const stock = Number(stockStr);
 
-            if (isNaN(price) || isNaN(stock)) {
+            if (isNaN(price) || isNaN(stock) || price < 0 || stock < 0 || price > 99_999_999) {
               continue;
             }
 
@@ -90,7 +92,7 @@ export default function ProductList() {
             count++;
             totalCount++;
 
-            if (count === 490) {
+            if (count === BATCH_COMMIT_SIZE) {
               await batch.commit();
               batch = writeBatch(db);
               count = 0;
@@ -106,8 +108,7 @@ export default function ProductList() {
           } else {
             toast.error('有効なデータが見つかりませんでした', { id: 'import' });
           }
-        } catch (error) {
-          console.error('Import error:', error);
+        } catch {
           toast.error('インポート中にエラーが発生しました', { id: 'import' });
         } finally {
           setIsImporting(false);
@@ -116,8 +117,7 @@ export default function ProductList() {
           }
         }
       },
-      error: (error) => {
-        console.error('Parse error:', error);
+      error: () => {
         toast.error('CSVの読み込みに失敗しました', { id: 'import' });
         setIsImporting(false);
         if (fileInputRef.current) {
@@ -142,7 +142,7 @@ export default function ProductList() {
         '在庫数': p.stock,
         '単位': p.unit || '',
         'タグ': p.tags ? p.tags.join(', ') : '',
-        '備考': (p as any).note || ''
+        '備考': p.note || ''
       }));
 
       const csv = Papa.unparse(exportData);
@@ -161,8 +161,7 @@ export default function ProductList() {
       URL.revokeObjectURL(url);
       
       toast.success('CSVをエクスポートしました');
-    } catch (error) {
-      console.error('Export error:', error);
+    } catch {
       toast.error('エクスポートに失敗しました');
     }
   };
@@ -201,8 +200,7 @@ export default function ProductList() {
       setTags(Array.from(allTags).sort());
       
       setLoading(false);
-    }, (err) => {
-      console.error("Firestore Error:", err);
+    }, () => {
       setError("商品の取得に失敗しました");
       setLoading(false);
     });

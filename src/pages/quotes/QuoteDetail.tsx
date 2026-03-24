@@ -46,8 +46,7 @@ export default function QuoteDetail() {
         const docSnap = await getDoc(docRef);
         if (!docSnap.exists()) throw new Error('見積の取得に失敗しました');
         setQuote({ id: docSnap.id, ...docSnap.data() } as QuoteDetail);
-      } catch (err: any) {
-        console.error("Firestore Error:", err);
+      } catch {
         toast.error('見積の取得に失敗しました');
         setError('見積の取得に失敗しました');
       } finally {
@@ -102,7 +101,18 @@ export default function QuoteDetail() {
         height: element.offsetHeight
       });
 
-      // スタイルを元に戻す
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (element.offsetHeight * pdfWidth) / 800;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`quote_${quote.quoteNumber}.pdf`);
+
+      toast.success('PDFをダウンロードしました', { id: 'pdf-loading' });
+    } catch {
+      toast.error('PDFの生成に失敗しました', { id: 'pdf-loading' });
+    } finally {
+      // スタイル・ダークモード・オーバーレイを確実に元に戻す
       element.style.width = originalWidth;
       element.style.maxWidth = originalMaxWidth;
       element.style.margin = originalMargin;
@@ -110,30 +120,9 @@ export default function QuoteDetail() {
       if (isDark) {
         document.documentElement.classList.add('dark');
       }
-      document.body.removeChild(overlay);
-      
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (element.offsetHeight * pdfWidth) / 800;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`quote_${quote.quoteNumber}.pdf`);
-      
-      toast.success('PDFをダウンロードしました', { id: 'pdf-loading' });
-    } catch (error) {
-      // エラー時も確実に元に戻す
-      element.style.width = originalWidth;
-      element.style.maxWidth = originalMaxWidth;
-      element.style.margin = originalMargin;
-      
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-      }
       if (overlay.parentNode) {
         document.body.removeChild(overlay);
       }
-      console.error(error);
-      toast.error('PDFの生成に失敗しました', { id: 'pdf-loading' });
     }
   };
 
@@ -264,8 +253,7 @@ export default function QuoteDetail() {
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       saveAs(blob, `quote_${quote.quoteNumber}.xlsx`);
       toast.success('Excelをダウンロードしました', { id: 'excel-loading' });
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error('Excelの生成に失敗しました', { id: 'excel-loading' });
     }
   };
@@ -374,7 +362,7 @@ export default function QuoteDetail() {
           </thead>
           <tbody className="bg-white dark:bg-gray-800 print:bg-white divide-y divide-gray-200 dark:divide-gray-700 print:divide-gray-200">
             {quote.items.map((item, index) => (
-              <tr key={index}>
+              <tr key={`${item.productId ?? 'item'}-${index}`}>
                 <td className="px-4 py-2 text-sm text-gray-900 dark:text-white print:text-gray-900 border-r dark:border-gray-700 print:border-gray-200">{item.productName}</td>
                 <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 print:text-gray-500 border-r dark:border-gray-700 print:border-gray-200">{item.manufacturer || '-'}</td>
                 <td className="px-4 py-2 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right border-r dark:border-gray-700 print:border-gray-200">¥{item.price.toLocaleString()}</td>

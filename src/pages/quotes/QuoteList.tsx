@@ -8,6 +8,7 @@ import Spinner from '../../components/Spinner';
 import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
 import Papa from 'papaparse';
+import { ITEMS_PER_PAGE, BATCH_COMMIT_SIZE } from '../../config/constants';
 
 type Quote = {
   id: string;
@@ -15,8 +16,23 @@ type Quote = {
   subject: string;
   customerName: string;
   issueDate: string;
+  expiryDate: string | null;
+  subtotal: number;
+  tax: number;
   total: number;
+  note: string | null;
 };
+
+function generateQuoteNumber(): string {
+  const now = new Date();
+  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const randomPart = Array.from(crypto.getRandomValues(new Uint8Array(3)))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase()
+    .slice(0, 4);
+  return `EST-${datePart}-${randomPart}`;
+}
 
 export default function QuoteList() {
   const navigate = useNavigate();
@@ -27,7 +43,7 @@ export default function QuoteList() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = ITEMS_PER_PAGE;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -66,7 +82,7 @@ export default function QuoteList() {
           let count = 0;
           let totalCount = 0;
 
-          for (const row of results.data as any[]) {
+          for (const row of results.data as Record<string, string>[]) {
             const quoteNumber = row['見積番号'] || row['quoteNumber'];
             const subject = row['件名'] || row['subject'];
             const customerName = row['宛名'] || row['customerName'];
@@ -77,7 +93,7 @@ export default function QuoteList() {
 
             const newDocRef = doc(collection(db, 'quotes'));
             batch.set(newDocRef, {
-              quoteNumber: quoteNumber || `EST-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+              quoteNumber: quoteNumber || generateQuoteNumber(),
               subject: subject,
               customerName: customerName,
               issueDate: row['発行日'] || row['issueDate'] || new Date().toISOString().split('T')[0],
@@ -94,7 +110,7 @@ export default function QuoteList() {
             count++;
             totalCount++;
 
-            if (count === 490) {
+            if (count === BATCH_COMMIT_SIZE) {
               await batch.commit();
               batch = writeBatch(db);
               count = 0;
@@ -110,8 +126,7 @@ export default function QuoteList() {
           } else {
             toast.error('有効なデータが見つかりませんでした', { id: 'import' });
           }
-        } catch (error) {
-          console.error('Import error:', error);
+        } catch {
           toast.error('インポート中にエラーが発生しました', { id: 'import' });
         } finally {
           setIsImporting(false);
@@ -120,8 +135,7 @@ export default function QuoteList() {
           }
         }
       },
-      error: (error) => {
-        console.error('Parse error:', error);
+      error: () => {
         toast.error('CSVの読み込みに失敗しました', { id: 'import' });
         setIsImporting(false);
         if (fileInputRef.current) {
@@ -143,11 +157,11 @@ export default function QuoteList() {
         '件名': q.subject || '',
         '宛名': q.customerName || '',
         '発行日': q.issueDate || '',
-        '有効期限': (q as any).expiryDate || '',
-        '小計': (q as any).subtotal || 0,
-        '消費税': (q as any).tax || 0,
+        '有効期限': q.expiryDate || '',
+        '小計': q.subtotal || 0,
+        '消費税': q.tax || 0,
         '合計': q.total || 0,
-        '備考': (q as any).note || ''
+        '備考': q.note || ''
       }));
 
       const csv = Papa.unparse(exportData);
@@ -165,8 +179,7 @@ export default function QuoteList() {
       URL.revokeObjectURL(url);
       
       toast.success('CSVをエクスポートしました');
-    } catch (error) {
-      console.error('Export error:', error);
+    } catch {
       toast.error('エクスポートに失敗しました');
     }
   };
@@ -180,8 +193,7 @@ export default function QuoteList() {
       })) as Quote[];
       setQuotes(quotesData);
       setLoading(false);
-    }, (err) => {
-      console.error("Firestore Error:", err);
+    }, () => {
       setError("見積の取得に失敗しました");
       setLoading(false);
     });
