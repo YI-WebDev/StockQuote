@@ -1,0 +1,131 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: products
+    // Document ID: auto-generated
+    // Fields:
+    //   - code: string (optional)
+    //   - name: string (required, max 100 chars)
+    //   - manufacturer: string (optional, max 100 chars)
+    //   - price: number (required, >= 0)
+    //   - stock: number (required, >= 0)
+    //   - unit: string (optional, max 20 chars)
+    //   - note: string (optional, max 1000 chars)
+    //   - tags: list of strings (optional, max 20 items, each max 50 chars)
+    //   - createdAt: string (required)
+    //   - updatedAt: string (required)
+    //
+    // Collection: tags
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required, max 50 chars)
+    //
+    // Collection: quotes
+    // Document ID: auto-generated
+    // Fields:
+    //   - quoteNumber: string (required, max 50 chars)
+    //   - subject: string (required, max 200 chars)
+    //   - customerName: string (required, max 100 chars)
+    //   - issueDate: string (required)
+    //   - expiryDate: string (optional)
+    //   - note: string (optional, max 2000 chars)
+    //   - subtotal: number (required, >= 0)
+    //   - tax: number (required, >= 0)
+    //   - total: number (required, >= 0)
+    //   - items: list of objects (required, max 100 items)
+    //   - createdAt: string (required)
+    //   - updatedAt: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return true; // Authentication removed
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidOptionalString(val, minLen, maxLen) {
+      return val == null || (val is string && val.size() >= minLen && val.size() <= maxLen);
+    }
+
+    function isPositiveNumber(val) {
+      return val is number && val >= 0;
+    }
+
+    function isValidTags(tags) {
+      return tags == null || (tags is list && tags.size() <= 20);
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'price', 'stock', 'createdAt', 'updatedAt']) &&
+             isValidString(data.name, 1, 100) &&
+             isPositiveNumber(data.price) &&
+             isPositiveNumber(data.stock) &&
+             isValidOptionalString(data.get('code', null), 0, 50) &&
+             isValidOptionalString(data.get('manufacturer', null), 0, 100) &&
+             isValidOptionalString(data.get('unit', null), 0, 20) &&
+             isValidOptionalString(data.get('note', null), 0, 1000) &&
+             isValidTags(data.get('tags', null)) &&
+             data.createdAt is string &&
+             data.updatedAt is string;
+    }
+
+    function isValidTag(data) {
+      return data.keys().hasAll(['name']) &&
+             isValidString(data.name, 1, 50);
+    }
+
+    function isValidQuote(data) {
+      return data.keys().hasAll(['quoteNumber', 'subject', 'customerName', 'issueDate', 'subtotal', 'tax', 'total', 'items', 'createdAt', 'updatedAt']) &&
+             isValidString(data.quoteNumber, 1, 50) &&
+             isValidString(data.subject, 1, 200) &&
+             isValidString(data.customerName, 1, 100) &&
+             data.issueDate is string &&
+             (data.get('expiryDate', null) == null || data.expiryDate is string) &&
+             isValidOptionalString(data.get('note', null), 0, 2000) &&
+             isPositiveNumber(data.subtotal) &&
+             isPositiveNumber(data.tax) &&
+             isPositiveNumber(data.total) &&
+             data.items is list && data.items.size() <= 100 &&
+             data.createdAt is string &&
+             data.updatedAt is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidProduct(request.resource.data);
+      allow update: if isAuthenticated() && isValidProduct(request.resource.data) &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated();
+    }
+
+    match /tags/{tagId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidTag(request.resource.data);
+      allow update: if isAuthenticated() && isValidTag(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    match /quotes/{quoteId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidQuote(request.resource.data);
+      allow update: if isAuthenticated() && isValidQuote(request.resource.data) &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated();
+    }
+  }
+}

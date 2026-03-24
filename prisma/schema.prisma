@@ -1,0 +1,63 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Product {
+  id           Int         @id @default(autoincrement())
+  code         String?     @unique // 商品コード
+  name         String      // 商品名
+  manufacturer String?     // メーカー
+  price        Int         // 単価
+  stock        Int         @default(0) // 在庫数量
+  unit         String?     // 単位
+  note         String?     // 備考
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  quoteItems   QuoteItem[]
+  tags         Tag[]
+}
+
+model Tag {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  products Product[]
+}
+
+model Quote {
+  id           Int         @id @default(autoincrement())
+  quoteNumber  String      @unique // 見積番号
+  subject      String      // 件名
+  customerName String      // 宛名
+  issueDate    DateTime    // 作成日
+  expiryDate   DateTime?   // 有効期限
+  note         String?     // 備考
+  subtotal     Int         // 小計
+  tax          Int         // 消費税
+  total        Int         // 合計
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  items        QuoteItem[]
+}
+
+model QuoteItem {
+  id           Int       @id @default(autoincrement())
+  quoteId      Int
+  quote        Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId    Int?
+  product      Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName  String    // 商品名（マスタからコピー）
+  manufacturer String?   // メーカー
+  price        Int       // 単価
+  quantity     Int       // 数量
+  amount       Int       // 金額
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}

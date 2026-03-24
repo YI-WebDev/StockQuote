@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A product available for quoting",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "manufacturer": { "type": "string" },
+        "price": { "type": "number" },
+        "stock": { "type": "number" },
+        "unit": { "type": "string" },
+        "note": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "stock"]
+    },
+    "Tag": {
+      "title": "Tag",
+      "description": "A tag for categorizing products",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Quote": {
+      "title": "Quote",
+      "description": "A quote generated for a customer",
+      "type": "object",
+      "properties": {
+        "quoteNumber": { "type": "string" },
+        "subject": { "type": "string" },
+        "customerName": { "type": "string" },
+        "issueDate": { "type": "string", "format": "date-time" },
+        "expiryDate": { "type": "string", "format": "date-time" },
+        "note": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "tax": { "type": "number" },
+        "total": { "type": "number" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productId": { "type": "string" },
+              "productName": { "type": "string" },
+              "manufacturer": { "type": "string" },
+              "price": { "type": "number" },
+              "quantity": { "type": "number" },
+              "amount": { "type": "number" }
+            },
+            "required": ["productName", "price", "quantity", "amount"]
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["quoteNumber", "subject", "customerName", "issueDate", "subtotal", "tax", "total", "items"]
+    }
+  },
+  "firestore": {
+    "products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Products collection"
+    },
+    "tags/{tagId}": {
+      "schema": { "$ref": "#/entities/Tag" },
+      "description": "Tags collection"
+    },
+    "quotes/{quoteId}": {
+      "schema": { "$ref": "#/entities/Quote" },
+      "description": "Quotes collection"
+    }
+  }
+}
