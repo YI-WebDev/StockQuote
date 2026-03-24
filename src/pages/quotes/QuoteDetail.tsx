@@ -7,7 +7,7 @@ import { db } from '../../firebase';
 import Spinner from '../../components/Spinner';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import domtoimage from 'dom-to-image-more';
+import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import type { QuoteDetail } from '../../types/models';
 
@@ -39,11 +39,11 @@ export default function QuoteDetail() {
   const handlePdfDownload = async () => {
     const element = document.getElementById('quote-document');
     if (!element || !quote) return;
-    
+
     toast.loading('PDFを生成中...', { id: 'pdf-loading' });
-    
+
     const isDark = document.documentElement.classList.contains('dark');
-    
+
     // 画面のチラつきやレイアウト崩れを隠すためのオーバーレイを表示
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed';
@@ -74,18 +74,32 @@ export default function QuoteDetail() {
       // スタイル適用待ち
       await new Promise(resolve => setTimeout(resolve, 150));
 
-      // dom-to-image-moreで画像化（scaleによる崩れを防ぐため等倍で取得）
-      const imgData = await domtoimage.toPng(element, {
-        bgcolor: '#ffffff',
-        width: 800,
-        height: element.offsetHeight
+      // html2canvasで画像化（高解像度で取得）
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
       });
 
+      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (element.offsetHeight * pdfWidth) / 800;
+      const pdfPageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      // 複数ページ対応
+      let remainingHeight = imgHeight;
+      let position = 0;
+
+      while (remainingHeight > 0) {
+        if (position > 0) {
+          pdf.addPage();
+        }
+        pdf.addImage(imgData, 'PNG', 0, -position, pdfWidth, imgHeight);
+        remainingHeight -= pdfPageHeight;
+        position += pdfPageHeight;
+      }
+
       pdf.save(`quote_${quote.quoteNumber}.pdf`);
 
       toast.success('PDFをダウンロードしました', { id: 'pdf-loading' });
