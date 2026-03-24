@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Edit, Trash2, MoreVertical, Upload, Download,
-  Settings, Package, TrendingUp, Layers, X,
+  Settings, Package, TrendingUp, Layers, X, Copy
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { collection, query, onSnapshot, doc, deleteDoc, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, deleteDoc, orderBy, writeBatch, addDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import Spinner from '../../components/Spinner';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -29,6 +29,10 @@ export default function ProductList() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   useOutsideClick([
     { selector: ['.dropdown-container', '.dropdown-trigger'], onOutside: () => setOpenDropdownId(null) },
@@ -64,6 +68,7 @@ export default function ProductList() {
 
   useEffect(() => {
     setCurrentPage(1);
+    setSelectedIds(new Set());
   }, [search, manufacturer, selectedTag]);
 
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
@@ -73,6 +78,57 @@ export default function ProductList() {
   );
 
   const isFiltered = search || manufacturer || selectedTag;
+
+  const allPageSelected = paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.has(p.id));
+  const somePageSelected = paginatedProducts.some(p => selectedIds.has(p.id));
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = somePageSelected && !allPageSelected;
+    }
+  }, [somePageSelected, allPageSelected]);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        paginatedProducts.forEach(p => next.delete(p.id));
+      } else {
+        paginatedProducts.forEach(p => next.add(p.id));
+      }
+      return next;
+    });
+  }, [allPageSelected, paginatedProducts]);
+
+  const toggleSelect = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      const ids: string[] = [...selectedIds];
+      const CHUNK = 490;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const batch = writeBatch(db);
+        ids.slice(i, i + CHUNK).forEach(id => batch.delete(doc(db, 'products', id)));
+        await batch.commit();
+      }
+      toast.success(`${selectedIds.size}件の商品を削除しました`);
+      setSelectedIds(new Set());
+    } catch {
+      toast.error('削除に失敗しました');
+    } finally {
+      setIsBulkDeleting(false);
+      setBulkDeleteConfirm(false);
+    }
+  };
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
@@ -147,6 +203,23 @@ export default function ProductList() {
       toast.success('CSVをエクスポートしました');
     } catch {
       toast.error('エクスポートに失敗しました');
+    }
+  };
+
+  const handleCopy = async (product: Product) => {
+    try {
+      const { id, ...rest } = product;
+      await addDoc(collection(db, 'products'), {
+        ...rest,
+        name: `${product.name} (コピー)`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      toast.success('商品をコピーしました');
+    } catch {
+      toast.error('商品のコピーに失敗しました');
+    } finally {
+      setOpenDropdownId(null);
     }
   };
 
@@ -351,6 +424,28 @@ export default function ProductList() {
         </div>
       )}
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">{selectedIds.size}件選択中</span>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200 underline"
+            >
+              選択解除
+            </button>
+          </div>
+          <button
+            onClick={() => setBulkDeleteConfirm(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            一括削除
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="card overflow-visible">
         {/* Desktop Table View */}
@@ -358,7 +453,17 @@ export default function ProductList() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-900/50">
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider rounded-tl-xl">コード</th>
+                <th className="pl-4 pr-2 py-3 rounded-tl-xl w-10">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={allPageSelected}
+                    onChange={toggleSelectAll}
+                    disabled={paginatedProducts.length === 0}
+                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-default"
+                  />
+                </th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">コード</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">商品名</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">メーカー</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">タグ</th>
@@ -370,7 +475,7 @@ export default function ProductList() {
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center">
+                  <td colSpan={8} className="px-5 py-16 text-center">
                     <div className="flex justify-center">
                       <Spinner />
                     </div>
@@ -378,7 +483,7 @@ export default function ProductList() {
                 </tr>
               ) : filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center">
+                  <td colSpan={8} className="px-5 py-16 text-center">
                     <Package className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       {isFiltered ? '条件に合う商品が見つかりません' : '商品が登録されていません'}
@@ -394,9 +499,17 @@ export default function ProductList() {
                 paginatedProducts.map((product) => (
                   <tr
                     key={product.id}
-                    className="hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group"
+                    className={`hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group ${selectedIds.has(product.id) ? 'bg-indigo-50/60 dark:bg-indigo-950/30' : ''}`}
                     onClick={() => navigate(`/products/${product.id}`)}
                   >
+                    <td className="pl-4 pr-2 py-3.5 whitespace-nowrap" onClick={(e) => toggleSelect(product.id, e)}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(product.id)}
+                        onChange={() => {}}
+                        className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                    </td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-xs text-gray-400 dark:text-gray-500 font-mono">{product.code || '—'}</td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">{product.name}</td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{product.manufacturer || '—'}</td>
@@ -435,6 +548,14 @@ export default function ProductList() {
                               <Edit className="w-4 h-4 text-gray-400" />
                               編集
                             </Link>
+                            <button
+                              onClick={() => handleCopy(product)}
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                              role="menuitem"
+                            >
+                              <Copy className="w-4 h-4 text-gray-400" />
+                              コピー
+                            </button>
                             <button
                               onClick={() => { setDeleteId(product.id); setOpenDropdownId(null); }}
                               className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -479,13 +600,23 @@ export default function ProductList() {
               {paginatedProducts.map((product) => (
                 <div
                   key={product.id}
-                  className="p-4 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer relative"
+                  className={`p-4 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer relative ${selectedIds.has(product.id) ? 'bg-indigo-50/60 dark:bg-indigo-950/30' : ''}`}
                   onClick={() => navigate(`/products/${product.id}`)}
                 >
                   <div className="flex justify-between items-start mb-1.5">
-                    <div className="pr-8 flex-1 min-w-0">
+                    <div className="flex items-start gap-2.5 pr-8 flex-1 min-w-0">
+                      <div onClick={(e) => toggleSelect(product.id, e)} className="pt-0.5 shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(product.id)}
+                          onChange={() => {}}
+                          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                      </div>
+                      <div className="min-w-0">
                       {product.code && <div className="text-xs text-gray-400 dark:text-gray-500 font-mono mb-0.5">{product.code}</div>}
                       <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">{product.name}</div>
+                      </div>
                     </div>
                     <div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
                       <button
@@ -506,6 +637,14 @@ export default function ProductList() {
                               <Edit className="w-4 h-4 text-gray-400" />
                               編集
                             </Link>
+                            <button
+                              onClick={() => handleCopy(product)}
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                              role="menuitem"
+                            >
+                              <Copy className="w-4 h-4 text-gray-400" />
+                              コピー
+                            </button>
                             <button
                               onClick={() => { setDeleteId(product.id); setOpenDropdownId(null); }}
                               className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -558,6 +697,14 @@ export default function ProductList() {
         message="本当にこの商品を削除しますか？この操作は取り消せません。"
         onConfirm={handleDelete}
         onCancel={() => setDeleteId(null)}
+      />
+
+      <ConfirmModal
+        isOpen={bulkDeleteConfirm}
+        title="商品の一括削除"
+        message={`選択した${selectedIds.size}件の商品を削除しますか？この操作は取り消せません。`}
+        onConfirm={handleBulkDelete}
+        onCancel={() => !isBulkDeleting && setBulkDeleteConfirm(false)}
       />
     </div>
   );
