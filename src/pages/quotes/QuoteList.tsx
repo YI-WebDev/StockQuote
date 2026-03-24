@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Edit, Trash2, Eye, Upload, Download, Settings, MoreVertical } from 'lucide-react';
+import {
+  Plus, Search, Edit, Trash2, Eye, Upload, Download,
+  Settings, MoreVertical, FileText, DollarSign, CalendarDays, X,
+} from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { collection, query, onSnapshot, doc, deleteDoc, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -86,7 +89,7 @@ export default function QuoteList() {
             const quoteNumber = row['見積番号'] || row['quoteNumber'];
             const subject = row['件名'] || row['subject'];
             const customerName = row['宛名'] || row['customerName'];
-            
+
             if (!subject || !customerName) {
               continue;
             }
@@ -106,7 +109,7 @@ export default function QuoteList() {
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
             });
-            
+
             count++;
             totalCount++;
 
@@ -120,7 +123,7 @@ export default function QuoteList() {
           if (count > 0) {
             await batch.commit();
           }
-          
+
           if (totalCount > 0) {
             toast.success(`${totalCount}件の見積をインポートしました`, { id: 'import' });
           } else {
@@ -165,10 +168,8 @@ export default function QuoteList() {
       }));
 
       const csv = Papa.unparse(exportData);
-      
       const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
       const blob = new Blob([bom, csv], { type: 'text/csv;charset=utf-8;' });
-      
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -177,7 +178,7 @@ export default function QuoteList() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       toast.success('CSVをエクスポートしました');
     } catch {
       toast.error('エクスポートに失敗しました');
@@ -206,7 +207,7 @@ export default function QuoteList() {
     try {
       await deleteDoc(doc(db, 'quotes', deleteId));
       toast.success('見積を削除しました');
-    } catch (err: any) {
+    } catch {
       toast.error('見積の削除に失敗しました');
     } finally {
       setDeleteId(null);
@@ -223,7 +224,6 @@ export default function QuoteList() {
     );
   });
 
-  // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [search]);
@@ -234,11 +234,24 @@ export default function QuoteList() {
     currentPage * itemsPerPage
   );
 
+  const totalAmount = quotes.reduce((sum, q) => sum + q.total, 0);
+  const thisMonthQuotes = quotes.filter(q => {
+    const d = new Date(q.issueDate);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  });
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">見積管理</h1>
-        <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">見積管理</h1>
+          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+            見積書の作成・管理
+          </p>
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <input
             type="file"
             accept=".csv"
@@ -246,40 +259,34 @@ export default function QuoteList() {
             onChange={handleFileChange}
             className="hidden"
           />
-          
+
+          {/* Settings dropdown */}
           <div className="relative settings-dropdown-container">
             <button
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="inline-flex justify-center items-center p-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="btn-secondary p-2"
               aria-label="設定"
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-4 h-4" />
             </button>
-
             {isSettingsOpen && (
-              <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-50 border border-gray-200 dark:border-gray-700">
-                <div className="py-1" role="menu" aria-orientation="vertical">
+              <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-48 rounded-xl shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black/5 z-50 border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="py-1" role="menu">
                   <button
-                    onClick={() => {
-                      setIsSettingsOpen(false);
-                      handleImportClick();
-                    }}
+                    onClick={() => { setIsSettingsOpen(false); handleImportClick(); }}
                     disabled={isImporting}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     role="menuitem"
                   >
-                    <Upload className="w-4 h-4 mr-2" />
+                    <Upload className="w-4 h-4 text-gray-400" />
                     CSVインポート
                   </button>
                   <button
-                    onClick={() => {
-                      setIsSettingsOpen(false);
-                      handleExportClick();
-                    }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center transition-colors"
+                    onClick={() => { setIsSettingsOpen(false); handleExportClick(); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2.5 transition-colors"
                     role="menuitem"
                   >
-                    <Download className="w-4 h-4 mr-2" />
+                    <Download className="w-4 h-4 text-gray-400" />
                     CSVエクスポート
                   </button>
                 </div>
@@ -289,53 +296,102 @@ export default function QuoteList() {
 
           <Link
             to="/quotes/new"
-            className="flex-1 sm:flex-none inline-flex justify-center items-center px-3 sm:px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+            className="btn-primary flex-1 sm:flex-none"
           >
-            <Plus className="w-4 h-4 sm:mr-2" />
+            <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">見積作成</span>
+            <span className="sm:hidden">作成</span>
           </Link>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 transition-colors">
-        <div className="relative max-w-md">
+      {/* Stat Cards */}
+      {!loading && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="stat-card">
+            <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center shrink-0">
+              <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">見積件数</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">{quotes.length}<span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-1">件</span></p>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+              <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">見積総額</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">¥{totalAmount.toLocaleString()}</p>
+            </div>
+          </div>
+          <div className="stat-card col-span-2 sm:col-span-1">
+            <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+              <CalendarDays className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">今月の見積</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">{thisMonthQuotes.length}<span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-1">件</span></p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="card p-4">
+        <div className="relative max-w-lg">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
+            <Search className="h-4 w-4 text-gray-400" />
           </div>
           <input
             type="text"
-            placeholder="見積番号、件名、宛名で検索..."
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+            placeholder="見積番号・件名・宛名で検索..."
+            className="input-base pl-9 pr-8"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
+        {search && (
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            {filteredQuotes.length}件 / 全{quotes.length}件
+          </p>
+        )}
       </div>
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/30 border-l-4 border-red-400 p-4">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
           <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         </div>
       )}
 
-      <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
+      {/* Table */}
+      <div className="card overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-900/50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">見積番号</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">件名</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">宛名</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">作成日</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">合計金額</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">操作</th>
+            <thead>
+              <tr className="bg-gray-50 dark:bg-gray-900/50">
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">見積番号</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">件名</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">宛名</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">発行日</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">合計金額</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">操作</th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td colSpan={6} className="px-5 py-16 text-center">
                     <div className="flex justify-center">
                       <Spinner />
                     </div>
@@ -343,64 +399,73 @@ export default function QuoteList() {
                 </tr>
               ) : filteredQuotes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                    見積が見つかりません
+                  <td colSpan={6} className="px-5 py-16 text-center">
+                    <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      {search ? '条件に合う見積が見つかりません' : '見積が登録されていません'}
+                    </p>
+                    {!search && (
+                      <Link to="/quotes/new" className="mt-3 inline-block text-sm text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
+                        最初の見積を作成する →
+                      </Link>
+                    )}
                   </td>
                 </tr>
               ) : (
                 paginatedQuotes.map((quote) => (
-                  <tr 
-                    key={quote.id} 
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer group"
+                  <tr
+                    key={quote.id}
+                    className="hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group"
                     onClick={() => navigate(`/quotes/${quote.id}`)}
                   >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white group-last:rounded-bl-lg">{quote.quoteNumber}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{quote.subject}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{quote.customerName}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span className="text-xs font-mono font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md">
+                        {quote.quoteNumber}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">{quote.subject}</td>
+                    <td className="px-5 py-3.5 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{quote.customerName}</td>
+                    <td className="px-5 py-3.5 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {new Date(quote.issueDate).toLocaleDateString('ja-JP')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white text-right">
+                    <td className="px-5 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white text-right">
                       ¥{quote.total.toLocaleString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative group-last:rounded-br-lg" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-5 py-3.5 whitespace-nowrap text-right text-sm relative" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => setOpenDropdownId(openDropdownId === quote.id ? null : quote.id)}
-                        className="dropdown-trigger text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        className="dropdown-trigger text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                       >
-                        <MoreVertical className="w-5 h-5" />
+                        <MoreVertical className="w-4 h-4" />
                       </button>
-                      
+
                       {openDropdownId === quote.id && (
-                        <div className="dropdown-container absolute right-8 top-10 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-50 border border-gray-200 dark:border-gray-700">
-                          <div className="py-1" role="menu" aria-orientation="vertical">
+                        <div className="dropdown-container absolute right-8 top-10 w-44 rounded-xl shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black/5 z-50 border border-gray-200 dark:border-gray-700 overflow-hidden">
+                          <div className="py-1" role="menu">
                             <Link
                               to={`/quotes/${quote.id}`}
-                              className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                               role="menuitem"
                               onClick={() => setOpenDropdownId(null)}
                             >
-                              <Eye className="w-4 h-4 mr-3 text-gray-400" />
+                              <Eye className="w-4 h-4 text-gray-400" />
                               詳細を見る
                             </Link>
                             <Link
                               to={`/quotes/${quote.id}/edit`}
-                              className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                               role="menuitem"
                               onClick={() => setOpenDropdownId(null)}
                             >
-                              <Edit className="w-4 h-4 mr-3 text-gray-400" />
+                              <Edit className="w-4 h-4 text-gray-400" />
                               編集
                             </Link>
                             <button
-                              onClick={() => {
-                                setDeleteId(quote.id);
-                                setOpenDropdownId(null);
-                              }}
-                              className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              onClick={() => { setDeleteId(quote.id); setOpenDropdownId(null); }}
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                               role="menuitem"
                             >
-                              <Trash2 className="w-4 h-4 mr-3 text-red-400" />
+                              <Trash2 className="w-4 h-4" />
                               削除
                             </button>
                           </div>
@@ -417,66 +482,70 @@ export default function QuoteList() {
         {/* Mobile Card View */}
         <div className="block md:hidden">
           {loading ? (
-            <div className="p-8 text-center">
+            <div className="p-10 text-center">
               <div className="flex justify-center">
                 <Spinner />
               </div>
             </div>
           ) : filteredQuotes.length === 0 ? (
-            <div className="p-8 text-center text-sm text-gray-500 dark:text-gray-400">
-              見積が見つかりません
+            <div className="p-10 text-center">
+              <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                {search ? '条件に合う見積が見つかりません' : '見積が登録されていません'}
+              </p>
+              {!search && (
+                <Link to="/quotes/new" className="mt-3 inline-block text-sm text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
+                  最初の見積を作成する →
+                </Link>
+              )}
             </div>
           ) : (
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700/60">
               {paginatedQuotes.map((quote) => (
-                <div 
-                  key={quote.id} 
-                  className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer relative"
+                <div
+                  key={quote.id}
+                  className="p-4 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer relative"
                   onClick={() => navigate(`/quotes/${quote.id}`)}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{quote.quoteNumber}</div>
-                      <div className="text-base font-medium text-gray-900 dark:text-white">{quote.subject}</div>
+                  <div className="flex justify-between items-start mb-1.5">
+                    <div className="flex-1 min-w-0 pr-8">
+                      <div className="text-xs font-mono text-indigo-600 dark:text-indigo-400 mb-0.5">{quote.quoteNumber}</div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">{quote.subject}</div>
                     </div>
                     <div className="relative" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => setOpenDropdownId(openDropdownId === quote.id ? null : quote.id)}
-                        className="dropdown-trigger text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        className="dropdown-trigger text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                       >
-                        <MoreVertical className="w-5 h-5" />
+                        <MoreVertical className="w-4 h-4" />
                       </button>
-                      
                       {openDropdownId === quote.id && (
-                        <div className="dropdown-container absolute right-0 top-8 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-50 border border-gray-200 dark:border-gray-700">
-                          <div className="py-1" role="menu" aria-orientation="vertical">
+                        <div className="dropdown-container absolute right-0 top-8 w-44 rounded-xl shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black/5 z-50 border border-gray-200 dark:border-gray-700 overflow-hidden">
+                          <div className="py-1" role="menu">
                             <Link
                               to={`/quotes/${quote.id}`}
-                              className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                               role="menuitem"
                               onClick={() => setOpenDropdownId(null)}
                             >
-                              <Eye className="w-4 h-4 mr-3 text-gray-400" />
+                              <Eye className="w-4 h-4 text-gray-400" />
                               詳細を見る
                             </Link>
                             <Link
                               to={`/quotes/${quote.id}/edit`}
-                              className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                               role="menuitem"
                               onClick={() => setOpenDropdownId(null)}
                             >
-                              <Edit className="w-4 h-4 mr-3 text-gray-400" />
+                              <Edit className="w-4 h-4 text-gray-400" />
                               編集
                             </Link>
                             <button
-                              onClick={() => {
-                                setDeleteId(quote.id);
-                                setOpenDropdownId(null);
-                              }}
-                              className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              onClick={() => { setDeleteId(quote.id); setOpenDropdownId(null); }}
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                               role="menuitem"
                             >
-                              <Trash2 className="w-4 h-4 mr-3 text-red-400" />
+                              <Trash2 className="w-4 h-4" />
                               削除
                             </button>
                           </div>
@@ -484,23 +553,19 @@ export default function QuoteList() {
                       )}
                     </div>
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                    {quote.customerName}
-                  </div>
-                  <div className="flex justify-between items-end mt-2">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      作成日: {new Date(quote.issueDate).toLocaleDateString('ja-JP')}
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">{quote.customerName}</div>
+                  <div className="flex justify-between items-end">
+                    <div className="text-xs text-gray-400 dark:text-gray-500">
+                      {new Date(quote.issueDate).toLocaleDateString('ja-JP')}
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">¥{quote.total.toLocaleString()}</div>
-                    </div>
+                    <div className="text-sm font-semibold text-gray-900 dark:text-white">¥{quote.total.toLocaleString()}</div>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-        
+
         {!loading && filteredQuotes.length > 0 && (
           <Pagination
             currentPage={currentPage}

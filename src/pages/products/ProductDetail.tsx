@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { ArrowLeft, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Package, Tag, FileText, DollarSign, Boxes } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../components/Spinner';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -33,7 +33,7 @@ export default function ProductDetail() {
       try {
         const docRef = doc(db, 'products', id);
         const docSnap = await getDoc(docRef);
-        
+
         if (docSnap.exists()) {
           setProduct({ id: docSnap.id, ...docSnap.data() } as Product);
         } else {
@@ -56,7 +56,7 @@ export default function ProductDetail() {
       await deleteDoc(doc(db, 'products', id));
       toast.success('商品を削除しました');
       navigate('/products');
-    } catch (err) {
+    } catch {
       toast.error('商品の削除に失敗しました');
     }
   };
@@ -71,8 +71,8 @@ export default function ProductDetail() {
 
   if (error || !product) {
     return (
-      <div className="bg-red-50 dark:bg-red-900/30 border-l-4 border-red-400 p-4">
-        <p className="text-sm text-red-700 dark:text-red-400">{error || '商品が見つかりません'}</p>
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-5">
+        <p className="text-sm text-red-700 dark:text-red-400 font-medium">{error || '商品が見つかりません'}</p>
         <Link to="/products" className="mt-2 inline-block text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
           一覧に戻る
         </Link>
@@ -82,78 +82,108 @@ export default function ProductDetail() {
 
   return (
     <div className="space-y-6">
+      {/* Page Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center gap-3">
           <Link
             to="/products"
-            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            <ArrowLeft className="w-6 h-6" />
+            <ArrowLeft className="w-5 h-5" />
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">商品詳細</h1>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">商品詳細</h1>
+            {product.code && (
+              <p className="text-xs font-mono text-gray-400 dark:text-gray-500 mt-0.5">{product.code}</p>
+            )}
+          </div>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex items-center gap-2">
           <Link
             to={`/products/${product.id}/edit`}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="btn-secondary"
           >
-            <Edit className="w-4 h-4 mr-2" />
-            編集
+            <Edit className="w-4 h-4" />
+            <span className="hidden sm:inline">編集</span>
           </Link>
           <button
             onClick={() => setIsDeleteModalOpen(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 active:bg-red-800 shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
           >
-            <Trash2 className="w-4 h-4 mr-2" />
-            削除
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden sm:inline">削除</span>
           </button>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
-        <div className="px-4 py-5 sm:p-6">
-          <dl className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2">
-            <div className="sm:col-span-1">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">商品コード</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">{product.code || '-'}</dd>
-            </div>
-            <div className="sm:col-span-1">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">商品名</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">{product.name}</dd>
-            </div>
-            <div className="sm:col-span-1">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">メーカー</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">{product.manufacturer || '-'}</dd>
-            </div>
-            <div className="sm:col-span-1">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">単価</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">¥{product.price.toLocaleString()}</dd>
-            </div>
-            <div className="sm:col-span-1">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">在庫数</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">{product.stock.toLocaleString()} {product.unit || ''}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">タグ</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
-                <div className="flex flex-wrap gap-2">
-                  {product.tags && product.tags.length > 0 ? (
-                    product.tags.map((tag) => (
-                      <span key={tag} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
-                        {tag}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-gray-500 dark:text-gray-400">-</span>
-                  )}
-                </div>
-              </dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">備考</dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{product.note || '-'}</dd>
-            </div>
-          </dl>
+      {/* Product name card */}
+      <div className="card px-6 py-5 flex items-center gap-4">
+        <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center shrink-0">
+          <Package className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-snug">{product.name}</h2>
+          {product.manufacturer && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{product.manufacturer}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Price + Stock highlight row */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="card px-5 py-4">
+          <div className="flex items-center gap-2 mb-1">
+            <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">単価</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            ¥{product.price.toLocaleString()}
+          </p>
+        </div>
+        <div className="card px-5 py-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Boxes className="w-3.5 h-3.5 text-indigo-500" />
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">在庫数</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {product.stock.toLocaleString()}
+            {product.unit && <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-1">{product.unit}</span>}
+          </p>
+        </div>
+      </div>
+
+      {/* Details card */}
+      <div className="card divide-y divide-gray-100 dark:divide-gray-700/60">
+        {/* Tags */}
+        <div className="px-6 py-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Tag className="w-4 h-4 text-gray-400" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">タグ</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {product.tags && product.tags.length > 0 ? (
+              product.tags.map((tag) => (
+                <span key={tag} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300">
+                  {tag}
+                </span>
+              ))
+            ) : (
+              <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+            )}
+          </div>
+        </div>
+
+        {/* Note */}
+        <div className="px-6 py-4">
+          <div className="flex items-center gap-2 mb-3">
+            <FileText className="w-4 h-4 text-gray-400" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">備考</span>
+          </div>
+          {product.note ? (
+            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{product.note}</p>
+          ) : (
+            <span className="text-sm text-gray-400 dark:text-gray-500">—</span>
+          )}
         </div>
       </div>
 
