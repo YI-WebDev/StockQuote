@@ -2,10 +2,10 @@ import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Edit, Trash2, MoreVertical, Upload, Download,
-  Settings, Package, TrendingUp, Layers, X,
+  Settings, Package, TrendingUp, Layers, X, Copy
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { collection, query, onSnapshot, doc, deleteDoc, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, deleteDoc, orderBy, writeBatch, addDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import Spinner from '../../components/Spinner';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -203,6 +203,23 @@ export default function ProductList() {
       toast.success('CSVをエクスポートしました');
     } catch {
       toast.error('エクスポートに失敗しました');
+    }
+  };
+
+  const handleCopy = async (product: Product) => {
+    try {
+      const { id, ...rest } = product;
+      await addDoc(collection(db, 'products'), {
+        ...rest,
+        name: `${product.name} (コピー)`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      toast.success('商品をコピーしました');
+    } catch {
+      toast.error('商品のコピーに失敗しました');
+    } finally {
+      setOpenDropdownId(null);
     }
   };
 
@@ -532,6 +549,14 @@ export default function ProductList() {
                               編集
                             </Link>
                             <button
+                              onClick={() => handleCopy(product)}
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                              role="menuitem"
+                            >
+                              <Copy className="w-4 h-4 text-gray-400" />
+                              コピー
+                            </button>
+                            <button
                               onClick={() => { setDeleteId(product.id); setOpenDropdownId(null); }}
                               className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                               role="menuitem"
@@ -612,6 +637,14 @@ export default function ProductList() {
                               <Edit className="w-4 h-4 text-gray-400" />
                               編集
                             </Link>
+                            <button
+                              onClick={() => handleCopy(product)}
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                              role="menuitem"
+                            >
+                              <Copy className="w-4 h-4 text-gray-400" />
+                              コピー
+                            </button>
                             <button
                               onClick={() => { setDeleteId(product.id); setOpenDropdownId(null); }}
                               className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"

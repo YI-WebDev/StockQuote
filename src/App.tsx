@@ -20,7 +20,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
-        <Toaster position="top-right" />
+        <Toaster position="bottom-right" />
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/products" replace />} />
