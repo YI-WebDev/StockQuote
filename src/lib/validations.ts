@@ -9,6 +9,7 @@ export const productSchema = z.object({
   unit: z.string().optional(),
   note: z.string().optional(),
   tags: z.array(z.string()).optional().default([]),
+  groupId: z.string().optional(),
 });
 
 export type ProductFormValues = z.infer<typeof productSchema>;

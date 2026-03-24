@@ -1,3 +1,10 @@
+export type ProductGroup = {
+  id: string;
+  name: string;
+  order: number;
+  createdAt: string;
+};
+
 export type Product = {
   id: string;
   code: string | null;
@@ -8,6 +15,7 @@ export type Product = {
   unit: string | null;
   tags: string[];
   note?: string;
+  groupId?: string;
 };
 
 export type QuoteItem = {

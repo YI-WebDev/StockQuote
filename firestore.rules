@@ -75,6 +75,7 @@ service cloud.firestore {
              isValidOptionalString(data.get('manufacturer', null), 0, 100) &&
              isValidOptionalString(data.get('unit', null), 0, 20) &&
              isValidOptionalString(data.get('note', null), 0, 1000) &&
+             isValidOptionalString(data.get('groupId', null), 0, 50) &&
              isValidTags(data.get('tags', null)) &&
              data.createdAt is string &&
              data.updatedAt is string;
@@ -83,6 +84,13 @@ service cloud.firestore {
     function isValidTag(data) {
       return data.keys().hasAll(['name']) &&
              isValidString(data.name, 1, 50);
+    }
+
+    function isValidProductGroup(data) {
+      return data.keys().hasAll(['name', 'order', 'createdAt']) &&
+             isValidString(data.name, 1, 50) &&
+             isPositiveNumber(data.order) &&
+             data.createdAt is string;
     }
 
     function isValidQuote(data) {
@@ -109,6 +117,14 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidProduct(request.resource.data);
       allow update: if isAuthenticated() && isValidProduct(request.resource.data) &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAuthenticated();
+    }
+
+    match /productGroups/{groupId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidProductGroup(request.resource.data);
+      allow update: if isAuthenticated() && isValidProductGroup(request.resource.data) &&
                     request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if isAuthenticated();
     }

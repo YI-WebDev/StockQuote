@@ -1,15 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import ProductForm from './ProductForm';
 import { ProductFormValues } from '../../lib/validations';
+import type { ProductGroup } from '../../types/models';
 
 export default function ProductCreate() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [groups, setGroups] = useState<ProductGroup[]>([]);
+
+  useEffect(() => {
+    getDocs(query(collection(db, 'productGroups'), orderBy('order', 'asc')))
+      .then(snap => setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ProductGroup[]))
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (data: ProductFormValues) => {
     setIsSubmitting(true);
@@ -41,7 +49,7 @@ export default function ProductCreate() {
         </div>
       )}
 
-      <ProductForm onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+      <ProductForm onSubmit={handleSubmit} isSubmitting={isSubmitting} groups={groups} />
     </div>
   );
 }

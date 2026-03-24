@@ -3,15 +3,17 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { productSchema, ProductFormValues } from '../../lib/validations';
 import { useNavigate } from 'react-router-dom';
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, FolderOpen } from 'lucide-react';
+import type { ProductGroup } from '../../types/models';
 
 type Props = {
   defaultValues?: Partial<ProductFormValues>;
   onSubmit: (data: ProductFormValues) => Promise<void>;
   isSubmitting: boolean;
+  groups?: ProductGroup[];
 };
 
-export default function ProductForm({ defaultValues, onSubmit, isSubmitting }: Props) {
+export default function ProductForm({ defaultValues, onSubmit, isSubmitting, groups = [] }: Props) {
   const navigate = useNavigate();
   const [tagInput, setTagInput] = useState('');
   
@@ -32,6 +34,7 @@ export default function ProductForm({ defaultValues, onSubmit, isSubmitting }: P
       unit: '',
       note: '',
       tags: [],
+      groupId: '',
       ...defaultValues,
     },
   });
@@ -101,6 +104,24 @@ export default function ProductForm({ defaultValues, onSubmit, isSubmitting }: P
               placeholder="例: TechCorp"
             />
           </div>
+
+          {groups.length > 0 && (
+            <div className="sm:col-span-6">
+              <label htmlFor="groupId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <span className="inline-flex items-center gap-1.5"><FolderOpen className="w-4 h-4" />グループ</span>
+              </label>
+              <select
+                id="groupId"
+                {...register('groupId')}
+                className="input-base"
+              >
+                <option value="">グループなし</option>
+                {groups.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

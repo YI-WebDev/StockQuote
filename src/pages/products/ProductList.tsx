@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Edit, Trash2, MoreVertical, Upload, Download,
-  Settings, Package, TrendingUp, Layers, X, Copy
+  Settings, Package, TrendingUp, Layers, X, Copy, ArrowUpDown, ArrowUp, ArrowDown, FolderOpen
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { collection, query, onSnapshot, doc, deleteDoc, orderBy, writeBatch, addDoc } from 'firebase/firestore';
@@ -13,7 +13,8 @@ import Pagination from '../../components/Pagination';
 import { ITEMS_PER_PAGE } from '../../config/constants';
 import { importCsvToFirestore, downloadCsvWithBom } from '../../lib/csv';
 import { useOutsideClick } from '../../hooks/useOutsideClick';
-import type { Product } from '../../types/models';
+import GroupManageModal from '../../components/GroupManageModal';
+import type { Product, ProductGroup } from '../../types/models';
 
 export default function ProductList() {
   const navigate = useNavigate();
@@ -34,6 +35,14 @@ export default function ProductList() {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
+  type SortColumn = 'code' | 'name' | 'manufacturer' | 'tags' | 'price' | 'stock' | null;
+  type SortDirection = 'asc' | 'desc';
+  const [sortColumn, setSortColumn] = useState<SortColumn>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [groups, setGroups] = useState<ProductGroup[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('all');
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+
   useOutsideClick([
     { selector: ['.dropdown-container', '.dropdown-trigger'], onOutside: () => setOpenDropdownId(null) },
     { selector: '.settings-dropdown-container', onOutside: () => setIsSettingsOpen(false) },
@@ -51,6 +60,14 @@ export default function ProductList() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const q2 = query(collection(db, 'productGroups'), orderBy('order', 'asc'));
+    const unsub = onSnapshot(q2, (snap) => {
+      setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ProductGroup[]);
+    });
+    return () => unsub();
+  }, []);
+
   const tags = useMemo(() => {
     const allTags = new Set<string>();
     products.forEach(p => p.tags?.forEach(t => allTags.add(t)));
@@ -61,18 +78,49 @@ export default function ProductList() {
     const matchSearch = search ? p.name.toLowerCase().includes(search.toLowerCase()) : true;
     const matchManufacturer = manufacturer ? (p.manufacturer || '').toLowerCase().includes(manufacturer.toLowerCase()) : true;
     const matchTag = selectedTag ? (p.tags || []).includes(selectedTag) : true;
-    return matchSearch && matchManufacturer && matchTag;
-  }), [products, search, manufacturer, selectedTag]);
+    const matchGroup = selectedGroupId === 'all' ? true
+      : selectedGroupId === 'ungrouped' ? (!p.groupId || p.groupId === '')
+      : p.groupId === selectedGroupId;
+    return matchSearch && matchManufacturer && matchTag && matchGroup;
+  }), [products, search, manufacturer, selectedTag, selectedGroupId]);
+
+  const sortedProducts = useMemo(() => {
+    if (!sortColumn) return filteredProducts;
+    
+    return [...filteredProducts].sort((a, b) => {
+      let aVal: any = a[sortColumn];
+      let bVal: any = b[sortColumn];
+
+      if (sortColumn === 'tags') {
+        aVal = (a.tags || []).join(', ');
+        bVal = (b.tags || []).join(', ');
+      } else if (aVal === undefined || aVal === null) {
+        aVal = '';
+      } else if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+      }
+      
+      if (bVal === undefined || bVal === null) {
+        bVal = '';
+      } else if (typeof bVal === 'string') {
+        bVal = bVal.toLowerCase();
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredProducts, sortColumn, sortDirection]);
 
   const totalValue = useMemo(() => products.reduce((sum, p) => sum + p.price * p.stock, 0), [products]);
 
   useEffect(() => {
     setCurrentPage(1);
     setSelectedIds(new Set());
-  }, [search, manufacturer, selectedTag]);
+  }, [search, manufacturer, selectedTag, sortColumn, sortDirection, selectedGroupId]);
 
-  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
-  const paginatedProducts = filteredProducts.slice(
+  const totalPages = Math.ceil(sortedProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = sortedProducts.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
@@ -108,6 +156,26 @@ export default function ProductList() {
       return next;
     });
   }, []);
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortColumn(null);
+        setSortDirection('desc');
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 group-hover/th:text-gray-500 opacity-0 group-hover/th:opacity-100 transition-opacity" />;
+    if (sortDirection === 'asc') return <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />;
+    return <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />;
+  };
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
@@ -288,6 +356,15 @@ export default function ProductList() {
             )}
           </div>
 
+          <button
+            onClick={() => setIsGroupModalOpen(true)}
+            className="btn-secondary p-2"
+            aria-label="グループ管理"
+            title="グループ管理"
+          >
+            <FolderOpen className="w-4 h-4" />
+          </button>
+
           <Link
             to="/products/new"
             className="btn-primary flex-1 sm:flex-none"
@@ -331,6 +408,46 @@ export default function ProductList() {
           </div>
         </div>
       )}
+
+      {/* Group Tabs */}
+      {groups.length > 0 && (
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
+          <button
+            onClick={() => setSelectedGroupId('all')}
+            className={`shrink-0 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+              selectedGroupId === 'all'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            すべて
+          </button>
+          {groups.map(g => (
+            <button
+              key={g.id}
+              onClick={() => setSelectedGroupId(g.id)}
+              className={`shrink-0 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                selectedGroupId === g.id
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              {g.name}
+            </button>
+          ))}
+          <button
+            onClick={() => setSelectedGroupId('ungrouped')}
+            className={`shrink-0 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+              selectedGroupId === 'ungrouped'
+                ? 'bg-gray-600 text-white shadow-sm'
+                : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
+            }`}
+          >
+            未分類
+          </button>
+        </div>
+      )
+      }
 
       {/* Filters */}
       <div className="card p-4 space-y-3">
@@ -463,12 +580,60 @@ export default function ProductList() {
                     className={`w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-default transition-opacity duration-150 ${somePageSelected ? 'opacity-100' : 'opacity-0 group-hover/header:opacity-100'}`}
                   />
                 </th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">コード</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">商品名</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">メーカー</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">タグ</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">単価</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">在庫数</th>
+                <th 
+                  className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('code')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    コード
+                    <SortIcon column="code" />
+                  </div>
+                </th>
+                <th 
+                  className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    商品名
+                    <SortIcon column="name" />
+                  </div>
+                </th>
+                <th 
+                  className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('manufacturer')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    メーカー
+                    <SortIcon column="manufacturer" />
+                  </div>
+                </th>
+                <th 
+                  className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('tags')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    タグ
+                    <SortIcon column="tags" />
+                  </div>
+                </th>
+                <th 
+                  className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('price')}
+                >
+                  <div className="flex items-center justify-end gap-1.5">
+                    <SortIcon column="price" />
+                    単価
+                  </div>
+                </th>
+                <th 
+                  className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('stock')}
+                >
+                  <div className="flex items-center justify-end gap-1.5">
+                    <SortIcon column="stock" />
+                    在庫数
+                  </div>
+                </th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider rounded-tr-xl">操作</th>
               </tr>
             </thead>
@@ -711,6 +876,11 @@ export default function ProductList() {
         message={`選択した${selectedIds.size}件の商品を削除しますか？この操作は取り消せません。`}
         onConfirm={handleBulkDelete}
         onCancel={() => !isBulkDeleting && setBulkDeleteConfirm(false)}
+      />
+
+      <GroupManageModal
+        isOpen={isGroupModalOpen}
+        onClose={() => setIsGroupModalOpen(false)}
       />
     </div>
   );

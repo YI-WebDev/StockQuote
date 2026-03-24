@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import ProductForm from './ProductForm';
 import { ProductFormValues } from '../../lib/validations';
 import Spinner from '../../components/Spinner';
+import type { ProductGroup } from '../../types/models';
 
 export default function ProductEdit() {
   const { id } = useParams();
@@ -14,6 +15,13 @@ export default function ProductEdit() {
   const [error, setError] = useState<string | null>(null);
   const [initialData, setInitialData] = useState<Partial<ProductFormValues> | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
+  const [groups, setGroups] = useState<ProductGroup[]>([]);
+
+  useEffect(() => {
+    getDocs(query(collection(db, 'productGroups'), orderBy('order', 'asc')))
+      .then(snap => setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ProductGroup[]))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -34,6 +42,7 @@ export default function ProductEdit() {
           unit: data.unit || '',
           note: data.note || '',
           tags: data.tags || [],
+          groupId: data.groupId || '',
         });
       } catch (err: any) {
         console.error("Firestore Error:", err);
@@ -88,7 +97,7 @@ export default function ProductEdit() {
         </div>
       )}
 
-      <ProductForm defaultValues={initialData} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+      <ProductForm defaultValues={initialData} onSubmit={handleSubmit} isSubmitting={isSubmitting} groups={groups} />
     </div>
   );
 }
