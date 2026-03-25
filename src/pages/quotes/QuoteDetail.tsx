@@ -44,7 +44,6 @@ export default function QuoteDetail() {
 
     const isDark = document.documentElement.classList.contains('dark');
 
-    // 画面のチラつきを隠すためのオーバーレイを表示
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed';
     overlay.style.inset = '0';
@@ -66,15 +65,12 @@ export default function QuoteDetail() {
         document.documentElement.classList.remove('dark');
       }
 
-      // PDF用にデスクトップ幅を強制
       element.style.width = '800px';
       element.style.maxWidth = '800px';
       element.style.margin = '0 auto';
 
-      // スタイル適用待ち
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // html2canvasで高品質キャプチャ
       const scale = 2;
       const canvas = await html2canvas(element, {
         scale,
@@ -88,16 +84,13 @@ export default function QuoteDetail() {
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfPageHeight = pdf.internal.pageSize.getHeight();
 
-      // キャンバスの実際のサイズからPDF上の高さを算出
       const imgWidthPx = canvas.width;
       const imgHeightPx = canvas.height;
       const pdfImgHeight = (imgHeightPx * pdfWidth) / imgWidthPx;
 
       if (pdfImgHeight <= pdfPageHeight) {
-        // 1ページに収まる場合
         pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfImgHeight);
       } else {
-        // 複数ページに分割
         const pageCanvasHeight = Math.floor((pdfPageHeight * imgWidthPx) / pdfWidth);
         let remainingHeight = imgHeightPx;
         let srcY = 0;
@@ -150,45 +143,40 @@ export default function QuoteDetail() {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("見積書");
 
-      // Set column widths
       worksheet.columns = [
-        { key: "col1", width: 40 }, // 商品名
-        { key: "col2", width: 20 }, // メーカー
-        { key: "col3", width: 15 }, // 単価
-        { key: "col4", width: 10 }, // 数量
-        { key: "col5", width: 15 }, // 金額
+        { key: "col1", width: 40 },
+        { key: "col2", width: 20 },
+        { key: "col3", width: 15 },
+        { key: "col4", width: 10 },
+        { key: "col5", width: 15 },
       ];
 
-      // Title
       worksheet.mergeCells('A2:E2');
       const titleCell = worksheet.getCell('A2');
       titleCell.value = "御 見 積 書";
       titleCell.font = { size: 20, bold: true, name: 'ＭＳ ゴシック' };
       titleCell.alignment = { horizontal: 'center' };
 
-      // Customer & Quote Info
       worksheet.getCell('A4').value = `${quote.customerName} 御中`;
       worksheet.getCell('A4').font = { size: 14, bold: true, underline: true, name: 'ＭＳ ゴシック' };
-      
+
       worksheet.getCell('D4').value = `見積番号: ${quote.quoteNumber}`;
       worksheet.getCell('D4').alignment = { horizontal: 'right' };
-      
+
       worksheet.getCell('A5').value = `件名: ${quote.subject}`;
       worksheet.getCell('D5').value = `作成日: ${new Date(quote.issueDate).toLocaleDateString('ja-JP')}`;
       worksheet.getCell('D5').alignment = { horizontal: 'right' };
-      
+
       worksheet.getCell('A6').value = `有効期限: ${quote.expiryDate ? new Date(quote.expiryDate).toLocaleDateString('ja-JP') : '設定なし'}`;
 
-      // Total Amount
       worksheet.getCell('A8').value = "下記の通り御見積申し上げます。";
-      
+
       worksheet.mergeCells('A9:C9');
       const totalAmountCell = worksheet.getCell('A9');
       totalAmountCell.value = `御見積合計金額: ¥${quote.total.toLocaleString()} (税込)`;
       totalAmountCell.font = { size: 16, bold: true, name: 'ＭＳ ゴシック' };
       totalAmountCell.border = { bottom: { style: 'medium' } };
 
-      // Table Header
       const headerRowIndex = 11;
       const headers = ["商品名", "メーカー", "単価", "数量", "金額"];
       headers.forEach((header, index) => {
@@ -202,13 +190,11 @@ export default function QuoteDetail() {
         cell.alignment = { horizontal: index >= 2 ? 'right' : 'left', vertical: 'middle' };
       });
 
-      // Table Items
       let currentRowIndex = headerRowIndex + 1;
       quote.items.forEach((item) => {
         const row = worksheet.getRow(currentRowIndex);
         row.values = [item.productName, item.manufacturer || "", item.price, item.quantity, item.amount];
-        
-        // Apply borders and alignment
+
         for (let i = 1; i <= 5; i++) {
           const cell = row.getCell(i);
           cell.border = {
@@ -222,9 +208,8 @@ export default function QuoteDetail() {
         currentRowIndex++;
       });
 
-      // Summary (Subtotal, Tax, Total)
       currentRowIndex++;
-      
+
       const summaryData = [
         { label: "小計", value: quote.subtotal },
         { label: "消費税 (10%)", value: quote.tax },
@@ -235,22 +220,21 @@ export default function QuoteDetail() {
         const row = worksheet.getRow(currentRowIndex);
         row.getCell(4).value = data.label;
         row.getCell(5).value = data.value;
-        
+
         row.getCell(4).alignment = { horizontal: 'left' };
         row.getCell(5).alignment = { horizontal: 'right' };
         row.getCell(5).numFmt = '"¥"#,##0';
-        
+
         if (data.bold) {
           row.getCell(4).font = { bold: true };
           row.getCell(5).font = { bold: true };
           row.getCell(4).border = { top: { style: 'thin' } };
           row.getCell(5).border = { top: { style: 'thin' } };
         }
-        
+
         currentRowIndex++;
       });
 
-      // Notes
       if (quote.note) {
         currentRowIndex++;
         worksheet.mergeCells(currentRowIndex, 1, currentRowIndex, 5);
@@ -258,7 +242,7 @@ export default function QuoteDetail() {
         noteHeaderCell.value = "備考";
         noteHeaderCell.font = { bold: true };
         noteHeaderCell.border = { top: { style: 'thin' } };
-        
+
         currentRowIndex++;
         worksheet.mergeCells(currentRowIndex, 1, currentRowIndex + 3, 5);
         const noteCell = worksheet.getCell(currentRowIndex, 1);
@@ -278,62 +262,75 @@ export default function QuoteDetail() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <Spinner />
+        <Spinner label="読み込み中..." />
       </div>
     );
   }
-  if (error || !quote) return <div className="text-red-600 dark:text-red-400">{error || 'Quote not found'}</div>;
+  if (error || !quote) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-5">
+          <p className="text-sm text-red-700 dark:text-red-400 font-medium">{error || '見積が見つかりません'}</p>
+          <Link to="/quotes" className="mt-2 inline-block text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+            一覧に戻る
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center print:hidden">
+      {/* Action Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <button
           onClick={() => navigate('/quotes')}
-          className="inline-flex items-center text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-2 -ml-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
         >
-          <ArrowLeft className="w-4 h-4 mr-1" />
-          戻る
+          <ArrowLeft className="w-4 h-4" />
+          見積一覧に戻る
         </button>
-        <div className="flex flex-wrap gap-3 justify-end mt-4 sm:mt-0">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <button
             onClick={handleExcelDownload}
-            className="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 border border-green-600 dark:border-green-500 shadow-sm text-sm font-medium rounded-md text-green-700 dark:text-green-400 bg-white dark:bg-gray-800 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
+            className="btn-secondary flex-1 sm:flex-none"
           >
-            <FileSpreadsheet className="w-4 h-4 mr-1 sm:mr-2" />
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span className="hidden sm:inline">Excel</span>
           </button>
           <button
             onClick={handlePdfDownload}
-            className="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 border border-red-600 dark:border-red-500 shadow-sm text-sm font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+            className="btn-secondary flex-1 sm:flex-none"
           >
-            <Download className="w-4 h-4 mr-1 sm:mr-2" />
+            <Download className="w-4 h-4 text-red-500 dark:text-red-400" />
             <span className="hidden sm:inline">PDF</span>
           </button>
           <button
             onClick={() => window.print()}
-            className="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            className="btn-secondary flex-1 sm:flex-none"
           >
-            <Printer className="w-4 h-4 mr-1 sm:mr-2" />
+            <Printer className="w-4 h-4" />
             <span className="hidden sm:inline">印刷</span>
           </button>
           <Link
             to={`/quotes/${quote.id}/edit`}
-            className="inline-flex items-center px-3 py-2 sm:px-4 sm:py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+            className="btn-primary flex-1 sm:flex-none"
           >
-            <Edit className="w-4 h-4 mr-1 sm:mr-2" />
+            <Edit className="w-4 h-4" />
             <span className="hidden sm:inline">編集</span>
           </Link>
         </div>
       </div>
 
-      <div id="quote-document" className="bg-white dark:bg-gray-800 p-10 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 print:shadow-none print:border-none print:p-0 print:bg-white transition-colors">
+      {/* Quote Document */}
+      <div id="quote-document" className="bg-white dark:bg-gray-800 p-8 sm:p-10 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 print:shadow-none print:border-none print:p-0 print:bg-white transition-colors">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white print:text-gray-900 tracking-wider">御 見 積 書</h1>
         </div>
 
         <div className="flex justify-between mb-8">
           <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white print:text-gray-900 border-b border-gray-900 dark:border-gray-100 print:border-gray-900 pb-1 mb-4 inline-block min-w-[200px]">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white print:text-gray-900 border-b-2 border-gray-900 dark:border-gray-100 print:border-gray-900 pb-1 mb-4 inline-block min-w-[200px]">
               {quote.customerName} 御中
             </h2>
             <div className="mt-4 space-y-2">
@@ -370,21 +367,21 @@ export default function QuoteDetail() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 print:divide-gray-200 border border-gray-200 dark:border-gray-700 print:border-gray-200">
             <thead className="bg-gray-50 dark:bg-gray-900/50 print:bg-gray-50">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">商品名</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">メーカー</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">単価</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">数量</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider">金額</th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">商品名</th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">メーカー</th>
+              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">単価</th>
+              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider border-r dark:border-gray-700 print:border-gray-200">数量</th>
+              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 print:text-gray-500 uppercase tracking-wider">金額</th>
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-800 print:bg-white divide-y divide-gray-200 dark:divide-gray-700 print:divide-gray-200">
             {quote.items.map((item, index) => (
               <tr key={`${item.productId ?? 'item'}-${index}`}>
-                <td className="px-4 py-2 text-sm text-gray-900 dark:text-white print:text-gray-900 border-r dark:border-gray-700 print:border-gray-200">{item.productName}</td>
-                <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 print:text-gray-500 border-r dark:border-gray-700 print:border-gray-200">{item.manufacturer || '-'}</td>
-                <td className="px-4 py-2 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right border-r dark:border-gray-700 print:border-gray-200">¥{item.price.toLocaleString()}</td>
-                <td className="px-4 py-2 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right border-r dark:border-gray-700 print:border-gray-200">{item.quantity.toLocaleString()}</td>
-                <td className="px-4 py-2 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right">¥{item.amount.toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-sm text-gray-900 dark:text-white print:text-gray-900 border-r dark:border-gray-700 print:border-gray-200">{item.productName}</td>
+                <td className="px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400 print:text-gray-500 border-r dark:border-gray-700 print:border-gray-200">{item.manufacturer || '-'}</td>
+                <td className="px-4 py-2.5 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right border-r dark:border-gray-700 print:border-gray-200">¥{item.price.toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right border-r dark:border-gray-700 print:border-gray-200">{item.quantity.toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-sm text-gray-900 dark:text-white print:text-gray-900 text-right font-medium">¥{item.amount.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
@@ -392,16 +389,16 @@ export default function QuoteDetail() {
         </div>
 
         <div className="flex justify-end mb-8">
-          <div className="w-64 space-y-2">
-            <div className="flex justify-between text-sm">
+          <div className="w-72 space-y-2">
+            <div className="flex justify-between text-sm py-1">
               <span className="text-gray-600 dark:text-gray-400 print:text-gray-600">小計</span>
               <span className="text-gray-900 dark:text-white print:text-gray-900">¥{quote.subtotal.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between text-sm py-1">
               <span className="text-gray-600 dark:text-gray-400 print:text-gray-600">消費税 (10%)</span>
               <span className="text-gray-900 dark:text-white print:text-gray-900">¥{quote.tax.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-base font-bold border-t border-gray-200 dark:border-gray-700 print:border-gray-200 pt-2">
+            <div className="flex justify-between text-base font-bold border-t border-gray-200 dark:border-gray-700 print:border-gray-200 pt-3">
               <span className="text-gray-900 dark:text-white print:text-gray-900">合計</span>
               <span className="text-gray-900 dark:text-white print:text-gray-900">¥{quote.total.toLocaleString()}</span>
             </div>

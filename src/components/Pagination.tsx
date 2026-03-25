@@ -21,7 +21,7 @@ export default function Pagination({
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
   return (
-    <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-700/60 px-5 py-3">
+    <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-700/60 px-5 py-3.5">
       {/* Mobile: prev/next only */}
       <div className="flex flex-1 justify-between sm:hidden">
         <button
@@ -31,7 +31,7 @@ export default function Pagination({
         >
           前へ
         </button>
-        <span className="text-xs text-gray-500 dark:text-gray-400 self-center">
+        <span className="text-xs text-gray-500 dark:text-gray-400 self-center tabular-nums">
           {currentPage} / {totalPages}
         </span>
         <button
@@ -53,7 +53,7 @@ export default function Pagination({
           <button
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="p-1.5 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <span className="sr-only">前へ</span>
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
@@ -71,7 +71,7 @@ export default function Pagination({
                   key={page}
                   onClick={() => onPageChange(page)}
                   aria-current={currentPage === page ? 'page' : undefined}
-                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                  className={`w-8 h-8 rounded-xl text-sm font-medium transition-all duration-150 ${
                     currentPage === page
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -99,7 +99,7 @@ export default function Pagination({
           <button
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="p-1.5 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <span className="sr-only">次へ</span>
             <ChevronRight className="h-4 w-4" aria-hidden="true" />

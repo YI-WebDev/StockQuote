@@ -27,7 +27,7 @@ export default function ProductDetail() {
         if (docSnap.exists()) {
           const productData = { id: docSnap.id, ...docSnap.data() } as Product;
           setProduct(productData);
-          
+
           if (productData.groupId) {
             const groupRef = doc(db, 'productGroups', productData.groupId);
             const groupSnap = await getDoc(groupRef);
@@ -63,7 +63,7 @@ export default function ProductDetail() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <Spinner />
+        <Spinner label="読み込み中..." />
       </div>
     );
   }
@@ -86,12 +86,12 @@ export default function ProductDetail() {
         <div className="flex items-center gap-3">
           <Link
             to="/products"
-            className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-2 rounded-xl text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-150"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">商品詳細</h1>
+            <h1 className="page-title">商品詳細</h1>
             {product.code && (
               <p className="text-xs font-mono text-gray-400 dark:text-gray-500 mt-0.5">{product.code}</p>
             )}
@@ -107,7 +107,7 @@ export default function ProductDetail() {
           </Link>
           <button
             onClick={() => setIsDeleteModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 active:bg-red-800 shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+            className="btn-danger"
           >
             <Trash2 className="w-4 h-4" />
             <span className="hidden sm:inline">削除</span>
@@ -130,18 +130,22 @@ export default function ProductDetail() {
 
       {/* Price + Stock highlight row */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="card px-5 py-4">
-          <div className="flex items-center gap-2 mb-1">
-            <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+        <div className="card px-5 py-4 hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            </div>
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">単価</span>
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
             ¥{product.price.toLocaleString()}
           </p>
         </div>
-        <div className="card px-5 py-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Boxes className="w-3.5 h-3.5 text-indigo-500" />
+        <div className="card px-5 py-4 hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+              <Boxes className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            </div>
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">在庫数</span>
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -154,13 +158,13 @@ export default function ProductDetail() {
       {/* Details card */}
       <div className="card divide-y divide-gray-100 dark:divide-gray-700/60">
         {/* Group */}
-        <div className="px-6 py-4">
+        <div className="px-6 py-5">
           <div className="flex items-center gap-2 mb-3">
             <FolderOpen className="w-4 h-4 text-gray-400" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">グループ</span>
           </div>
           {groupName ? (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+            <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
               {groupName}
             </span>
           ) : (
@@ -169,7 +173,7 @@ export default function ProductDetail() {
         </div>
 
         {/* Tags */}
-        <div className="px-6 py-4">
+        <div className="px-6 py-5">
           <div className="flex items-center gap-2 mb-3">
             <Tag className="w-4 h-4 text-gray-400" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">タグ</span>
@@ -177,7 +181,7 @@ export default function ProductDetail() {
           <div className="flex flex-wrap gap-1.5">
             {product.tags && product.tags.length > 0 ? (
               product.tags.map((tag) => (
-                <span key={tag} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300">
+                <span key={tag} className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300">
                   {tag}
                 </span>
               ))
@@ -188,7 +192,7 @@ export default function ProductDetail() {
         </div>
 
         {/* Note */}
-        <div className="px-6 py-4">
+        <div className="px-6 py-5">
           <div className="flex items-center gap-2 mb-3">
             <FileText className="w-4 h-4 text-gray-400" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">備考</span>

@@ -3,7 +3,7 @@ import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { quoteSchema, QuoteFormValues } from '../../lib/validations';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Search } from 'lucide-react';
+import { Plus, Trash2, Search, Save } from 'lucide-react';
 import ProductSelectModal from './ProductSelectModal';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -40,7 +40,7 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
     setValue,
     formState: { errors },
   } = useForm<QuoteFormValues>({
-    resolver: zodResolver(quoteSchema) as any, // zod v4とreact-hook-formの型不整合を回避
+    resolver: zodResolver(quoteSchema) as any,
     defaultValues: {
       quoteNumber: generateQuoteNumber(),
       subject: '',
@@ -120,19 +120,19 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
             setTimeout(() => setActiveDropdownIndex(null), 150);
           }}
           onFocus={() => setActiveDropdownIndex(index)}
-          className="block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          className="input-base"
           placeholder="商品名を入力"
           autoComplete="off"
         />
         {showDropdown && (
-          <div className="absolute z-50 left-3 right-3 mt-1 bg-white dark:bg-gray-800 shadow-lg rounded-md border border-gray-200 dark:border-gray-700 max-h-60 overflow-auto">
+          <div className="absolute z-50 left-3 right-3 mt-1 bg-white dark:bg-gray-800 shadow-xl rounded-xl border border-gray-200 dark:border-gray-700 max-h-60 overflow-auto">
             {filteredProducts.length > 0 ? (
               filteredProducts.map(product => (
                 <div
                   key={product.id}
-                  className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors"
+                  className="px-4 py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors"
                   onMouseDown={(e) => {
-                    e.preventDefault(); // Prevent input blur
+                    e.preventDefault();
                     handleProductSelect(product, index);
                   }}
                 >
@@ -155,137 +155,145 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
 
   return (
     <>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 space-y-6 transition-colors">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">基本情報</h2>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Basic Info */}
+        <div className="card p-6 sm:p-8 space-y-6">
+          <h2 className="section-title">
+            <span className="section-badge">1</span>
+            基本情報
+          </h2>
 
-          <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+          <div className="grid grid-cols-1 gap-y-5 gap-x-6 sm:grid-cols-6">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">見積番号 <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">見積番号 <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 {...register('quoteNumber')}
-                className="mt-1 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                className="input-base font-mono"
               />
-              {errors.quoteNumber && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.quoteNumber.message}</p>}
+              {errors.quoteNumber && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{errors.quoteNumber.message}</p>}
             </div>
 
             <div className="sm:col-span-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">件名 <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">件名 <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 {...register('subject')}
-                className="mt-1 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                className="input-base"
+                placeholder="見積の件名を入力"
               />
-              {errors.subject && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.subject.message}</p>}
+              {errors.subject && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{errors.subject.message}</p>}
             </div>
 
             <div className="sm:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">宛名 <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">宛名 <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 {...register('customerName')}
-                className="mt-1 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                className="input-base"
+                placeholder="顧客名を入力"
               />
-              {errors.customerName && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.customerName.message}</p>}
+              {errors.customerName && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{errors.customerName.message}</p>}
             </div>
 
             <div className="sm:col-span-3"></div>
 
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">作成日 <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">作成日 <span className="text-red-500">*</span></label>
               <input
                 type="date"
                 {...register('issueDate')}
-                className="mt-1 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                className="input-base"
               />
-              {errors.issueDate && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.issueDate.message}</p>}
+              {errors.issueDate && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{errors.issueDate.message}</p>}
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">有効期限</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">有効期限</label>
               <input
                 type="date"
                 {...register('expiryDate')}
-                className="mt-1 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                className="input-base"
               />
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 space-y-6 transition-colors">
-          <div className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-2">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white">見積明細</h2>
-          </div>
+        {/* Line Items */}
+        <div className="card p-6 sm:p-8 space-y-6">
+          <h2 className="section-title">
+            <span className="section-badge">2</span>
+            見積明細
+          </h2>
 
           {errors.items?.root && <p className="text-sm text-red-600 dark:text-red-400">{errors.items.root.message}</p>}
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-6 sm:-mx-8 px-6 sm:px-8">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900/50">
                 <tr>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-10"></th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">商品名 <span className="text-red-500">*</span></th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-48">メーカー</th>
-                  <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-32">単価 <span className="text-red-500">*</span></th>
-                  <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24">数量 <span className="text-red-500">*</span></th>
-                  <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-32">金額</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-10"></th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">商品名 <span className="text-red-500">*</span></th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-48">メーカー</th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-32">単価 <span className="text-red-500">*</span></th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-24">数量 <span className="text-red-500">*</span></th>
+                  <th className="px-3 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase w-32">金額</th>
                   <th className="px-3 py-3 w-10"></th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700/60">
                 {fields.map((field, index) => (
-                  <tr key={field.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-3 py-2">
+                  <tr key={field.id} className="hover:bg-gray-50/80 dark:hover:bg-gray-700/50 transition-colors group">
+                    <td className="px-3 py-2.5">
                       <button
                         type="button"
                         onClick={() => {
                           setActiveItemIndex(index);
                           setIsModalOpen(true);
                         }}
-                        className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors"
                         title="在庫から選択"
                       >
-                        <Search className="w-5 h-5" />
+                        <Search className="w-4 h-4" />
                       </button>
                     </td>
-                    <td className="px-3 py-2 relative">
+                    <td className="px-3 py-2.5 relative">
                       {renderProductNameCell(index)}
                       {errors.items?.[index]?.productName && (
                         <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.items[index]?.productName?.message}</p>
                       )}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5">
                       <input
                         type="text"
                         {...register(`items.${index}.manufacturer`)}
-                        className="block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                        className="input-base"
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5">
                       <input
                         type="number"
                         {...register(`items.${index}.price`)}
-                        className="block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 text-right transition-colors"
+                        className="input-base text-right"
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5">
                       <input
                         type="number"
                         {...register(`items.${index}.quantity`)}
-                        className="block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 text-right transition-colors"
+                        className="input-base text-right"
                       />
                     </td>
-                    <td className="px-3 py-2 text-right text-sm text-gray-900 dark:text-white">
+                    <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">
                       ¥{items[index]?.amount?.toLocaleString() || 0}
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-2.5 text-right">
                       <button
                         type="button"
                         onClick={() => remove(index)}
-                        className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
@@ -298,54 +306,60 @@ export default function QuoteForm({ defaultValues, onSubmit, isSubmitting }: Pro
             <button
               type="button"
               onClick={() => append({ productId: null, productName: '', manufacturer: '', price: 0, quantity: 1, amount: 0 })}
-              className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:border-indigo-500 hover:text-indigo-600 dark:hover:border-indigo-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex items-center justify-center"
+              className="w-full py-3 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600 dark:hover:border-indigo-500 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all flex items-center justify-center gap-2"
             >
-              <Plus className="w-5 h-5 mr-2" />
+              <Plus className="w-4 h-4" />
               新しい行を追加
             </button>
           </div>
 
-          <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="w-64 space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">小計</span>
-                <span className="text-gray-900 dark:text-white">¥{(subtotal || 0).toLocaleString()}</span>
+          <div className="flex justify-end pt-4 border-t border-gray-100 dark:border-gray-700">
+            <div className="w-72 space-y-2.5">
+              <div className="flex justify-between text-sm py-1">
+                <span className="text-gray-500 dark:text-gray-400">小計</span>
+                <span className="font-medium text-gray-900 dark:text-white">¥{(subtotal || 0).toLocaleString()}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">消費税 ({TAX_RATE * 100}%)</span>
-                <span className="text-gray-900 dark:text-white">¥{(tax || 0).toLocaleString()}</span>
+              <div className="flex justify-between text-sm py-1">
+                <span className="text-gray-500 dark:text-gray-400">消費税 ({TAX_RATE * 100}%)</span>
+                <span className="font-medium text-gray-900 dark:text-white">¥{(tax || 0).toLocaleString()}</span>
               </div>
-              <div className="flex justify-between text-base font-bold border-t border-gray-200 dark:border-gray-700 pt-2">
+              <div className="flex justify-between text-base font-bold border-t border-gray-200 dark:border-gray-700 pt-3">
                 <span className="text-gray-900 dark:text-white">合計</span>
-                <span className="text-gray-900 dark:text-white">¥{(total || 0).toLocaleString()}</span>
+                <span className="text-indigo-600 dark:text-indigo-400">¥{(total || 0).toLocaleString()}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 space-y-4 transition-colors">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">備考</label>
+        {/* Notes */}
+        <div className="card p-6 sm:p-8 space-y-4">
+          <h2 className="section-title">
+            <span className="section-badge">3</span>
+            備考
+          </h2>
           <textarea
             rows={4}
             {...register('note')}
-            className="block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md p-2 border bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+            className="input-base resize-none"
             placeholder="見積に関する特記事項など"
           />
         </div>
 
-        <div className="flex justify-end space-x-3">
+        {/* Actions */}
+        <div className="flex justify-end gap-3 pt-2">
           <button
             type="button"
             onClick={() => navigate('/quotes')}
-            className="bg-white dark:bg-gray-800 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+            className="btn-secondary"
           >
             キャンセル
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors"
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
+            <Save className="w-4 h-4" />
             {isSubmitting ? '保存中...' : '見積を保存'}
           </button>
         </div>
