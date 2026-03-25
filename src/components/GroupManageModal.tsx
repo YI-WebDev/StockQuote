@@ -140,7 +140,7 @@ export default function GroupManageModal({ isOpen, onClose }: Props) {
           ) : (
             <ul className="divide-y divide-gray-100 dark:divide-gray-700/60">
               {groups.map((group, index) => (
-                <li key={group.id} className="flex items-center gap-2 px-4 py-3 group hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                <li key={group.id} className="flex items-center gap-2 px-4 py-3 group hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   {/* Reorder buttons */}
                   <div className="flex flex-col gap-0.5 shrink-0">
                     <button

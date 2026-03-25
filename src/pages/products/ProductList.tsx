@@ -306,10 +306,10 @@ export default function ProductList() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="page-header">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">商品マスタ</h1>
-          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+          <h1 className="page-title">商品マスタ</h1>
+          <p className="page-subtitle">
             登録商品の一覧・管理
           </p>
         </div>
@@ -326,7 +326,7 @@ export default function ProductList() {
           <div className="relative settings-dropdown-container">
             <button
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="btn-secondary p-2"
+              className="btn-secondary p-2.5"
               aria-label="設定"
             >
               <Settings className="w-4 h-4" />
@@ -358,7 +358,7 @@ export default function ProductList() {
 
           <button
             onClick={() => setIsGroupModalOpen(true)}
-            className="btn-secondary p-2"
+            className="btn-secondary p-2.5"
             aria-label="グループ管理"
             title="グループ管理"
           >
@@ -411,10 +411,10 @@ export default function ProductList() {
 
       {/* Group Tabs */}
       {groups.length > 0 && (
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
           <button
             onClick={() => setSelectedGroupId('all')}
-            className={`shrink-0 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+            className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${
               selectedGroupId === 'all'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
@@ -426,7 +426,7 @@ export default function ProductList() {
             <button
               key={g.id}
               onClick={() => setSelectedGroupId(g.id)}
-              className={`shrink-0 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+              className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${
                 selectedGroupId === g.id
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
@@ -437,7 +437,7 @@ export default function ProductList() {
           ))}
           <button
             onClick={() => setSelectedGroupId('ungrouped')}
-            className={`shrink-0 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+            className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${
               selectedGroupId === 'ungrouped'
                 ? 'bg-gray-600 text-white shadow-sm'
                 : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
@@ -446,8 +446,7 @@ export default function ProductList() {
             未分類
           </button>
         </div>
-      )
-      }
+      )}
 
       {/* Filters */}
       <div className="card p-4 space-y-3">
@@ -543,9 +542,9 @@ export default function ProductList() {
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">{selectedIds.size}件選択中</span>
+            <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">{selectedIds.size}件選択中</span>
             <button
               onClick={() => setSelectedIds(new Set())}
               className="text-xs text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200 underline"
@@ -555,7 +554,7 @@ export default function ProductList() {
           </div>
           <button
             onClick={() => setBulkDeleteConfirm(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+            className="btn-danger text-xs px-3 py-2"
           >
             <Trash2 className="w-3.5 h-3.5" />
             一括削除

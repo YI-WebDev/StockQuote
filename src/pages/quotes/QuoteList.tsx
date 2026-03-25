@@ -164,10 +164,10 @@ export default function QuoteList() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="page-header">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">見積管理</h1>
-          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+          <h1 className="page-title">見積管理</h1>
+          <p className="page-subtitle">
             見積書の作成・管理
           </p>
         </div>
@@ -184,7 +184,7 @@ export default function QuoteList() {
           <div className="relative settings-dropdown-container">
             <button
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="btn-secondary p-2"
+              className="btn-secondary p-2.5"
               aria-label="設定"
             >
               <Settings className="w-4 h-4" />
