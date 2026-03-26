@@ -1,11 +1,12 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Edit, Trash2, Eye, Upload, Download,
   Settings, MoreVertical, FileText, DollarSign, CalendarDays, X,
+  ArrowUpDown, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { collection, query, onSnapshot, doc, deleteDoc, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, deleteDoc, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase';
 import Spinner from '../../components/Spinner';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -28,6 +29,15 @@ export default function QuoteList() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  type SortColumn = 'quoteNumber' | 'subject' | 'customerName' | 'issueDate' | 'total' | null;
+  type SortDirection = 'asc' | 'desc';
+  const [sortColumn, setSortColumn] = useState<SortColumn>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   useOutsideClick([
     { selector: ['.dropdown-container', '.dropdown-trigger'], onOutside: () => setOpenDropdownId(null) },
@@ -56,6 +66,21 @@ export default function QuoteList() {
     );
   }), [quotes, search]);
 
+  const sortedQuotes = useMemo(() => {
+    if (!sortColumn) return filteredQuotes;
+    return [...filteredQuotes].sort((a, b) => {
+      let aVal: any = a[sortColumn];
+      let bVal: any = b[sortColumn];
+      if (aVal === undefined || aVal === null) aVal = '';
+      else if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (bVal === undefined || bVal === null) bVal = '';
+      else if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredQuotes, sortColumn, sortDirection]);
+
   const totalAmount = useMemo(() => quotes.reduce((sum, q) => sum + q.total, 0), [quotes]);
 
   const thisMonthQuotes = useMemo(() => {
@@ -68,13 +93,85 @@ export default function QuoteList() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search]);
+    setSelectedIds(new Set());
+  }, [search, sortColumn, sortDirection]);
 
-  const totalPages = Math.ceil(filteredQuotes.length / ITEMS_PER_PAGE);
-  const paginatedQuotes = filteredQuotes.slice(
+  const totalPages = Math.ceil(sortedQuotes.length / ITEMS_PER_PAGE);
+  const paginatedQuotes = sortedQuotes.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+
+  const allPageSelected = paginatedQuotes.length > 0 && paginatedQuotes.every(q => selectedIds.has(q.id));
+  const somePageSelected = paginatedQuotes.some(q => selectedIds.has(q.id));
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = somePageSelected && !allPageSelected;
+    }
+  }, [somePageSelected, allPageSelected]);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        paginatedQuotes.forEach(q => next.delete(q.id));
+      } else {
+        paginatedQuotes.forEach(q => next.add(q.id));
+      }
+      return next;
+    });
+  }, [allPageSelected, paginatedQuotes]);
+
+  const toggleSelect = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortColumn(null);
+        setSortDirection('desc');
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 group-hover/th:text-gray-500 opacity-0 group-hover/th:opacity-100 transition-opacity" />;
+    if (sortDirection === 'asc') return <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />;
+    return <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />;
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      const ids: string[] = [...selectedIds];
+      const CHUNK = 490;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const batch = writeBatch(db);
+        ids.slice(i, i + CHUNK).forEach(id => batch.delete(doc(db, 'quotes', id)));
+        await batch.commit();
+      }
+      toast.success(`${selectedIds.size}件の見積を削除しました`);
+      setSelectedIds(new Set());
+    } catch {
+      toast.error('削除に失敗しました');
+    } finally {
+      setIsBulkDeleting(false);
+      setBulkDeleteConfirm(false);
+    }
+  };
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
@@ -259,31 +356,41 @@ export default function QuoteList() {
       )}
 
       {/* Search */}
-      <div className="card p-4">
-        <div className="relative max-w-lg">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-gray-400" />
+      <div className="card p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="見積番号・件名・宛名で検索..."
+              className="input-base pl-9 pr-8"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-          <input
-            type="text"
-            placeholder="見積番号・件名・宛名で検索..."
-            className="input-base pl-9 pr-8"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
+
         {search && (
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            {filteredQuotes.length}件 / 全{quotes.length}件
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400">フィルター:</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+              検索: {search}
+              <button onClick={() => setSearch('')} className="hover:text-indigo-900 dark:hover:text-indigo-100"><X className="w-3 h-3" /></button>
+            </span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              {filteredQuotes.length}件 / 全{quotes.length}件
+            </span>
+          </div>
         )}
       </div>
 
@@ -293,25 +400,97 @@ export default function QuoteList() {
         </div>
       )}
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">{selectedIds.size}件選択中</span>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200 underline"
+            >
+              選択解除
+            </button>
+          </div>
+          <button
+            onClick={() => setBulkDeleteConfirm(true)}
+            className="btn-danger text-xs px-3 py-2"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            一括削除
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="card overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead>
-              <tr className="bg-gray-50 dark:bg-gray-900/50">
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">見積番号</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">件名</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">宛名</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">発行日</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">合計金額</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">操作</th>
+              <tr className="bg-gray-50 dark:bg-gray-900/50 group/header">
+                <th className="pl-4 pr-2 py-3 rounded-tl-xl w-10">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={allPageSelected}
+                    onChange={toggleSelectAll}
+                    disabled={paginatedQuotes.length === 0}
+                    className={`w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-default transition-opacity duration-150 ${somePageSelected ? 'opacity-100' : 'opacity-0 group-hover/header:opacity-100'}`}
+                  />
+                </th>
+                <th
+                  className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('quoteNumber')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    見積番号
+                    <SortIcon column="quoteNumber" />
+                  </div>
+                </th>
+                <th
+                  className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('subject')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    件名
+                    <SortIcon column="subject" />
+                  </div>
+                </th>
+                <th
+                  className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('customerName')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    宛名
+                    <SortIcon column="customerName" />
+                  </div>
+                </th>
+                <th
+                  className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('issueDate')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    発行日
+                    <SortIcon column="issueDate" />
+                  </div>
+                </th>
+                <th
+                  className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer group/th hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors select-none"
+                  onClick={() => handleSort('total')}
+                >
+                  <div className="flex items-center justify-end gap-1.5">
+                    <SortIcon column="total" />
+                    合計金額
+                  </div>
+                </th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider rounded-tr-xl">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-16 text-center">
+                  <td colSpan={7} className="px-5 py-16 text-center">
                     <div className="flex justify-center">
                       <Spinner />
                     </div>
@@ -319,7 +498,7 @@ export default function QuoteList() {
                 </tr>
               ) : filteredQuotes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-16 text-center">
+                  <td colSpan={7} className="px-5 py-16 text-center">
                     <FileText className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       {search ? '条件に合う見積が見つかりません' : '見積が登録されていません'}
@@ -335,9 +514,17 @@ export default function QuoteList() {
                 paginatedQuotes.map((quote) => (
                   <tr
                     key={quote.id}
-                    className="hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group"
+                    className={`hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group ${selectedIds.has(quote.id) ? 'bg-indigo-50/60 dark:bg-indigo-950/30' : ''}`}
                     onClick={() => navigate(`/quotes/${quote.id}`)}
                   >
+                    <td className="pl-4 pr-2 py-3.5 whitespace-nowrap cursor-pointer" onClick={(e) => toggleSelect(quote.id, e)}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(quote.id)}
+                        onChange={() => {}}
+                        className={`w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer transition-opacity duration-150 ${selectedIds.has(quote.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                      />
+                    </td>
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <span className="text-xs font-mono font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md">
                         {quote.quoteNumber}
@@ -424,15 +611,31 @@ export default function QuoteList() {
               {paginatedQuotes.map((quote) => (
                 <div
                   key={quote.id}
-                  className="p-4 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer relative"
+                  className={`p-4 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer relative ${selectedIds.has(quote.id) ? 'bg-indigo-50/60 dark:bg-indigo-950/30' : ''}`}
                   onClick={() => navigate(`/quotes/${quote.id}`)}
                 >
                   <div className="flex justify-between items-start mb-1.5">
-                    <div className="flex-1 min-w-0 pr-8">
-                      <div className="text-xs font-mono text-indigo-600 dark:text-indigo-400 mb-0.5">{quote.quoteNumber}</div>
-                      <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">{quote.subject}</div>
+                    <div className="flex items-start gap-2.5 pr-8 flex-1 min-w-0">
+                      <div
+                        onClick={(e) => toggleSelect(quote.id, e)}
+                        className="pt-0.5 shrink-0 w-5 h-5 flex items-center justify-center"
+                      >
+                        {selectedIds.has(quote.id) ? (
+                          <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center">
+                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-mono text-indigo-600 dark:text-indigo-400 mb-0.5">{quote.quoteNumber}</div>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">{quote.subject}</div>
+                      </div>
                     </div>
-                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                    <div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => setOpenDropdownId(openDropdownId === quote.id ? null : quote.id)}
                         className="dropdown-trigger text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -473,8 +676,8 @@ export default function QuoteList() {
                       )}
                     </div>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">{quote.customerName}</div>
-                  <div className="flex justify-between items-end">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 pl-7">{quote.customerName}</div>
+                  <div className="flex justify-between items-end pl-7">
                     <div className="text-xs text-gray-400 dark:text-gray-500">
                       {new Date(quote.issueDate).toLocaleDateString('ja-JP')}
                     </div>
@@ -490,7 +693,7 @@ export default function QuoteList() {
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
-            totalItems={filteredQuotes.length}
+            totalItems={sortedQuotes.length}
             itemsPerPage={ITEMS_PER_PAGE}
             onPageChange={setCurrentPage}
           />
@@ -503,6 +706,14 @@ export default function QuoteList() {
         message="本当にこの見積を削除しますか？この操作は取り消せません。"
         onConfirm={handleDelete}
         onCancel={() => setDeleteId(null)}
+      />
+
+      <ConfirmModal
+        isOpen={bulkDeleteConfirm}
+        title="一括削除の確認"
+        message={`選択した${selectedIds.size}件の見積を削除しますか？この操作は取り消せません。`}
+        onConfirm={handleBulkDelete}
+        onCancel={() => setBulkDeleteConfirm(false)}
       />
     </div>
   );
