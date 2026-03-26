@@ -423,9 +423,9 @@ export default function QuoteList() {
       )}
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-visible">
         {/* Desktop Table View */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden md:block">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-900/50 group/header">
@@ -713,7 +713,7 @@ export default function QuoteList() {
         title="一括削除の確認"
         message={`選択した${selectedIds.size}件の見積を削除しますか？この操作は取り消せません。`}
         onConfirm={handleBulkDelete}
-        onCancel={() => setBulkDeleteConfirm(false)}
+        onCancel={() => !isBulkDeleting && setBulkDeleteConfirm(false)}
       />
     </div>
   );
